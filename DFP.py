@@ -208,8 +208,7 @@ class DFPAgent:
 
     def useGoal(self, f_vec, goal):
         for i in range(f_vec.shape[0]):
-            for k in range(f_vec.shape[1]):
-                f_vec[i][k] = f_vec[i][k]*goal[k]
+            f_vec[i] = f_vec[i]*goal
         return f_vec
 
     def reshape(self, state, mes, splitImage=True, reset=False):
