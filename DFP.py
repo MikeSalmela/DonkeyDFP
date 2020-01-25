@@ -39,6 +39,8 @@ class Memory:
         randomInds = np.random.choice(len(self.mem)-(self.maxTimestep+1), count)
 
         for i, ind in enumerate(randomInds):
+            if self.mem[ind][3]:
+                ind += 1
             isDone = False
             future = np.zeros((self.timesteps, self.mesCount))
             k = 0
@@ -83,10 +85,10 @@ class DFPAgent:
         self.epsilon = 1.0
         self.epsilonMin = 0.01
         self.epsilonDecay = 0.99995
-        self.learningRate = 0.00001
+        self.learningRate = 0.0001
         self.actionCount = num_actions
         self.batchSize = 64
-        self.futureTargets = [1, 2, 4, 8, 16, 32, 64]
+        self.futureTargets = [4, 8, 16, 24, 32, 48]
         self.startPoint = 3*self.futureTargets[-1]
         # Memory
         self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
@@ -106,7 +108,8 @@ class DFPAgent:
             i = Flatten()(input_Image)
             i = Dense(512, activation='relu')(i)
             i = Dense(512, activation='relu')(i)
-            i = Dense(512, activation='relu')(i)
+            i = Dense(256, activation='relu')(i)
+            i = Dense(256, activation='linear')(i)
 
         else:
             print("Using Convolutional model")
@@ -125,9 +128,11 @@ class DFPAgent:
 
         m = Flatten()(input_Measurement)
         m = Dense(64, activation='relu')(m)
+        m = Dense(64, activation='relu')(m)
         m = Dense(64, activation='linear')(m)
 
         g = Flatten()(input_Goal)
+        g = Dense(64, activation='relu')(g)
         g = Dense(64, activation='relu')(g)
         g = Dense(64, activation='linear')(g)
 
@@ -144,7 +149,8 @@ class DFPAgent:
         #Action stream
         action = Dense(512, activation='relu', name='action_1')(merged)
         action = Dense(256, activation='relu', name='action_2')(action)
-        action = Dense(pred_size, activation='linear', name='action_3')(action)
+        action = Dense(256, activation='relu', name='action_3')(action)
+        action = Dense(pred_size, activation='linear', name='action_4')(action)
         action = BatchNormalization()(action)
 
         action_expectation = Add()([action, expectation])
