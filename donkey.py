@@ -7,7 +7,7 @@ from DFP import DFPAgent
 speed = 0.3
                     #120, 180, 3
                     #3072
-agent = DFPAgent(7, (120, 160,3), (2,), (2,6))
+agent = DFPAgent(7, (60, 160,3), (2,), (2,6))
 
 os.environ['DONKEY_SIM_PATH'] = "/home/mike/Programs/DonkeySimLinux/donkey_sim.x86_64"
 os.environ['DONKEY_SIM_PORT'] = str(9091)
@@ -33,8 +33,5 @@ for episode in range(50000):
         obs, mes = agent.reshape(obs, mes)
         agent.remember(obs, mes, action, done)
         agent.train(goal)
-
-    print(f"Epsilon: {agent.epsilon}")
-    print(f"Mem size: {agent.memory.getSize()}")
-
+    agent.info()
     agent.save("Pretrained.h5")

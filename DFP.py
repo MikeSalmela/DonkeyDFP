@@ -82,14 +82,17 @@ class DFPAgent:
             self.previousStates = None
 
         self.mesCount = np.prod(M_shape)
-        self.epsilon = 1.0
-        self.epsilonMin = 0.01
-        self.epsilonDecay = 0.99995
-        self.learningRate = 0.0001
+        self.epsilon =          1.0
+        self.epsilonMin =       0.01
+        self.epsilonDecay =     0.99995
+        self.learningRate =     0.0001
+        self.minLearningRate =  0.00001
+        self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
         self.futureTargets = [4, 8, 16, 24, 32, 48]
         self.startPoint = 3*self.futureTargets[-1]
+        self.splitImage = True
         # Memory
         self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
         self.timesteps = len(self.futureTargets)
@@ -113,43 +116,39 @@ class DFPAgent:
 
         else:
             print("Using Convolutional model")
-            i = Conv2D(32, (3, 3), activation='relu', padding='same')(input_Image)
+            i = Conv2D(32, (4, 4), activation='relu', padding='same')(input_Image)
             i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(32, (3, 3), activation='relu', padding='same')(i)
-            i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(64, (3, 3), activation='relu', padding='same')(i)
+            i = Conv2D(64, (2, 2), activation='relu', padding='same')(i)
             i = MaxPooling2D((2,2), padding='same')(i)
             i = Conv2D(128, (3, 3), activation='relu', padding='same')(i)
             i = MaxPooling2D((2,2), padding='same')(i)
             i = Flatten()(i)
             i = Dense(1024, activation='relu')(i)
-            i = Dense(512, activation='relu')(i)
 
 
         m = Flatten()(input_Measurement)
-        m = Dense(64, activation='relu')(m)
-        m = Dense(64, activation='relu')(m)
-        m = Dense(64, activation='linear')(m)
+        m = Dense(128, activation='relu')(m)
+        m = Dense(128, activation='relu')(m)
+        m = Dense(128, activation='linear')(m)
 
         g = Flatten()(input_Goal)
-        g = Dense(64, activation='relu')(g)
-        g = Dense(64, activation='relu')(g)
-        g = Dense(64, activation='linear')(g)
+        g = Dense(128, activation='relu')(g)
+        g = Dense(128, activation='relu')(g)
+        g = Dense(128, activation='linear')(g)
 
         merged = Concatenate()([i,m,g])
         pred_size = self.actionCount * np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(128, activation='relu', name='expectation_1')(merged)
+        expectation = Dense(1024, activation='relu', name='expectation_1')(merged)
         expectation = Dense(np.prod(M_shape)*self.timesteps \
                     , activation='linear', name='expectation_2')(expectation)
 
         expectation = Concatenate()([expectation]*self.actionCount)
 
         #Action stream
-        action = Dense(512, activation='relu', name='action_1')(merged)
-        action = Dense(256, activation='relu', name='action_2')(action)
-        action = Dense(256, activation='relu', name='action_3')(action)
+        action = Dense(1024, activation='relu', name='action_1')(merged)
+        action = Dense(1024, activation='relu', name='action_3')(action)
         action = Dense(pred_size, activation='linear', name='action_4')(action)
         action = BatchNormalization()(action)
 
@@ -163,6 +162,11 @@ class DFPAgent:
         model.summary()
         plot_model(model, to_file='DFPNetwork.png')
         return model
+
+    def info(self):
+        print(f"Epsilon: {self.epsilon}")
+        print(f"Mem size: {self.memory.getSize()}")
+        print(f"Learning rate: {self.learningRate}")
 
     def encodeState(self, state):
         state = np.array([ip.reshape(state)])
@@ -206,12 +210,17 @@ class DFPAgent:
         prediction = np.sum(prediction, axis=1)
         return np.argmax(prediction)
 
+    def decayLearningRate(self):
+        if self.learningRage > self.minLearningRate:
+            self.learningRate *= self.learningRateDecay
+            self.model.lr.assign(self.learningRate)
+
     def useGoal(self, f_vec, goal):
         for i in range(f_vec.shape[0]):
             f_vec[i] = f_vec[i]*goal
         return f_vec
 
-    def reshape(self, state, mes, splitImage=True, reset=False):
+    def reshape(self, state, mes, reset=False):
         if self.encoder != None:
             state = self.encodeState(state)
         if(reset == True and self.stackI):
@@ -223,6 +232,8 @@ class DFPAgent:
             self.previousStates = np.append(state, self.previousStates[:,:,:3], axis=2)
             state = self.previousStates
         else:
+            if(self.splitImage):
+                state = f.splitImage(state)
             state = ip.normalize(state)
             state = np.array([state])
         mes = np.array(mes)
