@@ -3,7 +3,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
 from tensorflow.keras.layers import BatchNormalization, Reshape, Subtract, Add
-from tensorflow.keras.layers import Concatenate, Dense, LSTM, Input, Concatenate
+from tensorflow.keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import load_model
 import functions as f
@@ -83,18 +83,20 @@ class DFPAgent:
 
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
+        self.epsilon0 =         1.0
         self.epsilonMin =       0.01
-        self.epsilonDecay =     0.99995
-        self.learningRate =     0.0001
-        self.minLearningRate =  0.00001
+        self.epsilonDecay =     50000
+        self.learningRate =     0.0002
+        self.maxLearningRate =  0.0002
+        self.minLearningRate =  0.00002
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
-        self.futureTargets = [4, 8, 16, 24, 32, 48]
-        self.startPoint = 3*self.futureTargets[-1]
-        self.splitImage = True
+        self.futureTargets = [1, 2, 4, 8, 16, 32]
+        self.startPoint = 3000
+        self.splitImage = False
         # Memory
-        self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
+        self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
         self.timesteps = len(self.futureTargets)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
 
@@ -116,40 +118,47 @@ class DFPAgent:
 
         else:
             print("Using Convolutional model")
-            i = Conv2D(32, (4, 4), activation='relu', padding='same')(input_Image)
-            i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(64, (2, 2), activation='relu', padding='same')(i)
-            i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(128, (3, 3), activation='relu', padding='same')(i)
-            i = MaxPooling2D((2,2), padding='same')(i)
+            i = Conv2D(32, (8, 8), strides=(4, 4))(input_Image)
+            i = LeakyReLU()(i)
+            i = Conv2D(64, (4, 4), strides=(2, 2))(i)
+            i = LeakyReLU()(i)
+            i = Conv2D(64, (3, 3))(i)
+            i = LeakyReLU()(i)
             i = Flatten()(i)
-            i = Dense(1024, activation='relu')(i)
+            i = Dense(512, activation='relu')(i)
 
 
         m = Flatten()(input_Measurement)
-        m = Dense(128, activation='relu')(m)
-        m = Dense(128, activation='relu')(m)
+        m = Dense(128)(m)
+        m = LeakyReLU()(m)
+        m = Dense(128)(m)
+        m = LeakyReLU()(m)
         m = Dense(128, activation='linear')(m)
 
         g = Flatten()(input_Goal)
-        g = Dense(128, activation='relu')(g)
-        g = Dense(128, activation='relu')(g)
+        g = Dense(128)(g)
+        g = LeakyReLU()(g)
+        g = Dense(128)(g)
+        g = LeakyReLU()(g)
         g = Dense(128, activation='linear')(g)
 
         merged = Concatenate()([i,m,g])
         pred_size = self.actionCount * np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(1024, activation='relu', name='expectation_1')(merged)
+        expectation = Dense(1024, name='expectation_1')(merged)
+        expectation = LeakyReLU()(expectation)
         expectation = Dense(np.prod(M_shape)*self.timesteps \
                     , activation='linear', name='expectation_2')(expectation)
 
         expectation = Concatenate()([expectation]*self.actionCount)
 
         #Action stream
-        action = Dense(1024, activation='relu', name='action_1')(merged)
-        action = Dense(1024, activation='relu', name='action_3')(action)
-        action = Dense(pred_size, activation='linear', name='action_4')(action)
+        action = Dense(1024, name='action_1')(merged)
+        action = LeakyReLU()(action)
+        action = Dense(1024, name='action_2')(action)
+        action = LeakyReLU()(action)
+        action = Dense(pred_size, activation='linear', name='action_3')(action)
         action = BatchNormalization()(action)
 
         action_expectation = Add()([action, expectation])
@@ -193,7 +202,7 @@ class DFPAgent:
             #self.printInfo(state, mes, action, f, f_target)
             self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
-                self.epsilon *= self.epsilonDecay
+                self.epsilon -= (self.epsilon0 - 0.001)/self.epsilonDecay
 
     def actionToTurn(self, step):
         turn = (step)/int(self.actionCount/2) - 1
@@ -205,15 +214,15 @@ class DFPAgent:
     def act(self, state, mes, goal):
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0,self.actionCount)
-        prediction = np.array(self.pred(state, mes, np.array([goal])))
+        prediction = np.array(self.pred(np.reshape(state, (1, 80, 80, 4)), mes, np.array([goal])))
         prediction = np.reshape(prediction, (self.actionCount, self.timesteps * self.mesCount))
         prediction = np.sum(prediction, axis=1)
         return np.argmax(prediction)
 
     def decayLearningRate(self):
-        if self.learningRage > self.minLearningRate:
-            self.learningRate *= self.learningRateDecay
-            self.model.lr.assign(self.learningRate)
+        if self.learningRate > self.minLearningRate:
+            self.learningRate = self.epsilon * self.maxLearningRate
+            K.set_value(self.model.optimizer.lr, self.learningRate)
 
     def useGoal(self, f_vec, goal):
         for i in range(f_vec.shape[0]):
@@ -235,7 +244,6 @@ class DFPAgent:
             if(self.splitImage):
                 state = f.splitImage(state)
             state = ip.normalize(state)
-            state = np.array([state])
         mes = np.array(mes)
         mes = mes.reshape((1, self.mesCount))
         return state, mes
