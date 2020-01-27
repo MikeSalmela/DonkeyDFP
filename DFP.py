@@ -42,24 +42,24 @@ class Memory:
             if self.mem[ind][3]:
                 ind += 1
             isDone = False
-            future = np.zeros((self.timesteps, self.mesCount))
+            future = np.zeros((self.mesCount, self.timesteps))
             k = 0
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
-                    f = self.mem[ind+j][1] - self.mem[ind][1]
-                    future[k] = f
+                    for m in range(self.mesCount):
+                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
-                    f = self.mem[ind+offset][1] - self.mem[ind][1]
-                    future[k] = f
+                    for m in range(self.mesCount):
+                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
             actions[i]      = self.mem[ind][2]
-            f_vec[i]        = future.reshape((self.mesCount, self.timesteps))
+            f_vec[i]        = future #.reshape((self.mesCount, self.timesteps), order='C')
 
         return states, measurements, actions, f_vec
 
@@ -86,8 +86,8 @@ class DFPAgent:
         self.epsilon0 =         1.0
         self.epsilonMin =       0.01
         self.epsilonDecay =     50000
-        self.learningRate =     0.0002
-        self.maxLearningRate =  0.0002
+        self.learningRate =     0.0001
+        self.maxLearningRate =  0.0001
         self.minLearningRate =  0.00002
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
@@ -133,14 +133,14 @@ class DFPAgent:
         m = LeakyReLU()(m)
         m = Dense(128)(m)
         m = LeakyReLU()(m)
-        m = Dense(128, activation='linear')(m)
+        m = Dense(128, activation='relu')(m)
 
         g = Flatten()(input_Goal)
         g = Dense(128)(g)
         g = LeakyReLU()(g)
         g = Dense(128)(g)
         g = LeakyReLU()(g)
-        g = Dense(128, activation='linear')(g)
+        g = Dense(128, activation='relu')(g)
 
         merged = Concatenate()([i,m,g])
         pred_size = self.actionCount * np.prod(M_shape) * self.timesteps
@@ -155,8 +155,6 @@ class DFPAgent:
 
         #Action stream
         action = Dense(1024, name='action_1')(merged)
-        action = LeakyReLU()(action)
-        action = Dense(1024, name='action_2')(action)
         action = LeakyReLU()(action)
         action = Dense(pred_size, activation='linear', name='action_3')(action)
         action = BatchNormalization()(action)
@@ -195,8 +193,11 @@ class DFPAgent:
         if (self.memory.getSize() > self.startPoint):
             state, mes, action, f = self.memory.randomSample(self.batchSize)
             f = self.useGoal(f, goal)
+            #print(f[0])
             goal = np.repeat(np.array([goal]), self.batchSize, axis=0)
             f_target = np.array(self.pred(state, mes, goal))
+            #print(f"f_target: {f_target.shape}")
+            #print(f"f: {f.shape}")
             for i in range(self.batchSize):
                 f_target[i][int(action[i])] = f[i]
             #self.printInfo(state, mes, action, f, f_target)
@@ -229,21 +230,8 @@ class DFPAgent:
             f_vec[i] = f_vec[i]*goal
         return f_vec
 
-    def reshape(self, state, mes, reset=False):
-        if self.encoder != None:
-            state = self.encodeState(state)
-        if(reset == True and self.stackI):
-            self.previousStates = np.stack((state, state, state, state), axis=0)
-            self.previousStates = self.previousStates.reshape(1, state.shape[1], 4)
-            state = self.previousStates
-        elif self.stackI:
-            state = state.reshape(1, state.shape[1], 1)
-            self.previousStates = np.append(state, self.previousStates[:,:,:3], axis=2)
-            state = self.previousStates
-        else:
-            if(self.splitImage):
-                state = f.splitImage(state)
-            state = ip.normalize(state)
+    def reshape(self, state, mes):
+        state = ip.normalize(state)
         mes = np.array(mes)
         mes = mes.reshape((1, self.mesCount))
         return state, mes
