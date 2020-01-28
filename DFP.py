@@ -146,7 +146,7 @@ class DFPAgent:
         pred_size = self.actionCount * np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(1024, name='expectation_1')(merged)
+        expectation = Dense(512, name='expectation_1')(merged)
         expectation = LeakyReLU()(expectation)
         expectation = Dense(np.prod(M_shape)*self.timesteps \
                     , activation='linear', name='expectation_2')(expectation)
@@ -201,7 +201,7 @@ class DFPAgent:
             for i in range(self.batchSize):
                 f_target[i][int(action[i])] = f[i]
             #self.printInfo(state, mes, action, f, f_target)
-            print(f"f_target: {f_target}")
+            #print(f"f_target: {f_target}")
             self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
                 self.epsilon -= (self.epsilon0 - 0.001)/self.epsilonDecay
