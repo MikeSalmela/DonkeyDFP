@@ -59,7 +59,7 @@ class Memory:
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
             actions[i]      = self.mem[ind][2]
-            f_vec[i]        = future #.reshape((self.mesCount, self.timesteps), order='C')
+            f_vec[i]        = future
 
         return states, measurements, actions, f_vec
 
@@ -201,6 +201,7 @@ class DFPAgent:
             for i in range(self.batchSize):
                 f_target[i][int(action[i])] = f[i]
             #self.printInfo(state, mes, action, f, f_target)
+            print(f"f_target: {f_target}")
             self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
                 self.epsilon -= (self.epsilon0 - 0.001)/self.epsilonDecay
@@ -216,7 +217,13 @@ class DFPAgent:
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0,self.actionCount)
         prediction = np.array(self.pred(np.reshape(state, (1, 80, 80, 4)), mes, np.array([goal])))
-        prediction = np.reshape(prediction, (self.actionCount, self.timesteps * self.mesCount))
+        prediction = prediction.reshape((self.actionCount, self.mesCount, self.timesteps))
+        g = np.zeros(self.timesteps)
+        g[-3:] = 1
+        g = np.tile(g, self.mesCount)
+        g = g.reshape((self.mesCount, self.timesteps))
+        prediction = prediction[:]*g
+        prediction = np.reshape(prediction, (self.actionCount, self.mesCount * self.timesteps))
         prediction = np.sum(prediction, axis=1)
         return np.argmax(prediction)
 

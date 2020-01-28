@@ -67,7 +67,7 @@ try:
             done = game.is_episode_finished()
             if not done:
                 state = game.get_state()
-                if state.game_variables[0] - 4 > health:
+                if state.game_variables[0] - 2 > health:
                     print("Medkit")
                     medkit += 1
                 if health - state.game_variables[0] > 8:
@@ -79,6 +79,7 @@ try:
                 health -= 10
                 medkit -= 10
             m = np.array([health/30.0, medkit/10.0, poison])
+            m = np.array([0.1, 0.2, 0.3])
             s, m = agent.reshape(s, m)
             agent.remember(s, m, action, done)
             agent.train(g)
