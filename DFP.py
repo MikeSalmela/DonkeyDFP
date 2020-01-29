@@ -73,22 +73,14 @@ class DFPAgent:
             self.encoder = load_model(encoderName)
         else:
             self.encoder = None
-        # If Imagedata is stacked to get some information of movement:
-        self.stackI = stackI
-        self.stackSize = stackSize
-        if stackI:
-            I_shape = np.prod(I_shape)
-            I_shape = (I_shape, stackSize)
-            self.previousStates = None
-
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
         self.epsilon0 =         1.0
         self.epsilonMin =       0.01
         self.epsilonDecay =     50000
         self.learningRate =     0.0001
-        self.maxLearningRate =  0.0001
-        self.minLearningRate =  0.00002
+        self.maxLearningRate =  0.0000001
+        self.minLearningRate =  0.0000
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
@@ -150,7 +142,6 @@ class DFPAgent:
         expectation = LeakyReLU()(expectation)
         expectation = Dense(np.prod(M_shape)*self.timesteps \
                     , activation='linear', name='expectation_2')(expectation)
-
         expectation = Concatenate()([expectation]*self.actionCount)
 
         #Action stream
@@ -183,11 +174,11 @@ class DFPAgent:
         self.memory.append(state, measurement, action, done)
 
     def printInfo(self, state, mes, action, f, f_target):
-            print(f"state: {state.shape}")
-            print(f"mes: {mes.shape}")
-            print(f"action: {action.shape}")
-            print(f"f: {f.shape}")
-            print(f"f_target: {f_target.shape}")
+        print(f"state: {state.shape}")
+        print(f"mes: {mes.shape}")
+        print(f"action: {action.shape}")
+        print(f"f: {f.shape}")
+        print(f"f_target: {f_target.shape}")
 
     def train(self, goal):
         if (self.memory.getSize() > self.startPoint):
