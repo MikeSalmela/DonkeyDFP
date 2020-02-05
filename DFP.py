@@ -77,15 +77,15 @@ class DFPAgent:
         self.epsilon =          1.0
         self.epsilon0 =         1.0
         self.epsilonMin =       0.01
-        self.epsilonDecay =     50000
+        self.epsilonDecay =     500000
         self.learningRate =     0.0001
-        self.maxLearningRate =  0.0000001
-        self.minLearningRate =  0.0000
+        self.maxLearningRate =  0.0001
+        self.minLearningRate =  0.00001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
         self.futureTargets = [1, 2, 4, 8, 16, 32]
-        self.startPoint = 3000
+        self.startPoint = 6000
         self.splitImage = False
         # Memory
         self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
@@ -196,6 +196,19 @@ class DFPAgent:
             self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
                 self.epsilon -= (self.epsilon0 - 0.001)/self.epsilonDecay
+        elif (self.memory.getSize() > 200):
+            self.pretrain(goal)
+
+    def pretrain(self, goal):
+        state, mes, action, f = self.memory.randomSample(self.batchSize)
+        f = self.useGoal(f, goal)
+        goal = np.repeat(np.array([goal]), self.batchSize, axis=0)
+        f_target = np.array(self.pred(state, mes, goal))
+        for i in range(self.batchSize):
+            for k in range(self.actionCount):
+                f_target[i][int(k)] = f[i]
+        self.model.train_on_batch([state, mes, goal], f_target)
+    
 
     def actionToTurn(self, step):
         turn = (step)/int(self.actionCount/2) - 1
@@ -213,6 +226,7 @@ class DFPAgent:
         g[-3:] = 1
         g = np.tile(g, self.mesCount)
         g = g.reshape((self.mesCount, self.timesteps))
+        #print(prediction)
         prediction = prediction[:]*g
         prediction = np.reshape(prediction, (self.actionCount, self.mesCount * self.timesteps))
         prediction = np.sum(prediction, axis=1)

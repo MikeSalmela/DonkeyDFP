@@ -88,7 +88,8 @@ for episode in range(50000):
     agent.info()
     print(f"Episode: {episode}")
     if episode % 20 == 0:
+        agent.decayLearningRate()
         agent.save("Pretrained.h5")
 #except:
-#   plt.plot(lifes)
+#    plt.plot(lifes)
 #    plt.savefig('life_length.pdf')
