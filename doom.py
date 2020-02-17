@@ -34,7 +34,7 @@ def actionToInput(action):
     return a.tolist()
 
 game = vizdoom.DoomGame()
-game.load_config("health_gathering_supreme.cfg")
+game.load_config("health_gathering.cfg")
 game.set_sound_enabled(True)
 game.set_screen_resolution(vizdoom.ScreenResolution.RES_640X480)
 game.set_window_visible(True)

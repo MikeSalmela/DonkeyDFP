@@ -77,13 +77,13 @@ class DFPAgent:
         self.epsilon =          1.0
         self.epsilon0 =         1.0
         self.epsilonMin =       0.01
-        self.epsilonDecay =     500000
+        self.epsilonDecay =     10000
         self.learningRate =     0.0001
         self.maxLearningRate =  0.0001
         self.minLearningRate =  0.00001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
-        self.batchSize = 64
+        self.batchSize = 32
         self.futureTargets = [1, 2, 4, 8, 16, 32]
         self.startPoint = 6000
         self.splitImage = False
@@ -154,7 +154,7 @@ class DFPAgent:
 
         output = Reshape((self.actionCount, M_shape[0], self.timesteps))(action_expectation)
 
-        model = Model(inputs=(input_Image, input_Measurement, input_Goal), outputs=output)
+        model = Model(input=[input_Image, input_Measurement, input_Goal], outputs=output)
         opt = Adam(lr=self.learningRate)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
