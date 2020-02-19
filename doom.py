@@ -7,13 +7,17 @@ import cv2
 import skimage
 import matplotlib.pyplot as plt
 
-imgShape = (80, 80)
+imgShape = (84, 84)
 
 def modImg(img):
-    img = skimage.color.rgb2gray(img)
-    img = np.array(img)
-    img = cv2.resize(img, imgShape) 
-    return img
+    img = np.rollaxis(img, 0, 3)    # It becomes (640, 480, 3)
+    img = skimage.transform.resize(img, imgShape)
+    return skimage.color.rgb2gray(img)
+
+    #img = skimage.color.rgb2gray(img)
+    #img = np.array(img)
+    #img = cv2.resize(img, imgShape) 
+    #return img
 
 def append(x, a):
     x = np.reshape(x, (1, *imgShape, 1))
@@ -40,7 +44,7 @@ game.set_screen_resolution(vizdoom.ScreenResolution.RES_640X480)
 game.set_window_visible(True)
 game.init()
 
-agent = DFPAgent(3, (80, 80, 4), (3,), (3,6))
+agent = DFPAgent(3, (*imgShape, 4), (3,), (3*6,))
 lifes = []
 #try:
 for episode in range(50000):
@@ -55,9 +59,9 @@ for episode in range(50000):
     s = np.stack([img]*4)
     s = addImg(s, state.screen_buffer) 
     m = np.array([health/30.0, medkit/10.0, poison])
-    g = np.array([1.0, 1.0, -1.0])
-    g = np.repeat(g,6)
-    g = g.reshape((3,6))
+    g = np.array([1.0, 1.0, -1.0]*6)
+    #g = np.repeat(g,6)
+    #g = g.reshape((3,6))
     s, m = agent.reshape(s, m)
     while not done:
         lifetime += 1
@@ -76,19 +80,16 @@ for episode in range(50000):
                 poison += 1
             health = state.game_variables[0]
             s = addImg(s, state.screen_buffer)
-        if done:
-            health -= 10
-            medkit -= 10
         m = np.array([health/30.0, medkit/10.0, poison])
-        s, m = agent.reshape(s, m)
-        #agent.remember(s, m, action, done)
-        agent.train(g)
+        m = m.reshape((1,3))
+        loss = agent.train(g)
     lifes.append(lifetime)
     #agent.decayLearningRate()
     agent.info()
     print(f"Episode: {episode}")
+    print(f"Loss: {loss}")
     if episode % 20 == 0:
-        agent.decayLearningRate()
+        #agent.decayLearningRate()
         agent.save("Pretrained.h5")
 #except:
 #    plt.plot(lifes)
