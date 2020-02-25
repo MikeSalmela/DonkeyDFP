@@ -1,15 +1,15 @@
-import tensorflow.keras
-from tensorflow.keras.models import Model
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
-from tensorflow.keras.layers import BatchNormalization, Reshape, Subtract, Add
-from tensorflow.keras.layers import Concatenate, Dense, LSTM, Input, Concatenate
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import load_model
+#import tensorflow.keras
+from keras.models import Model
+from keras.models import Sequential
+from keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
+from keras.layers import BatchNormalization, Reshape, Subtract, Add
+from keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
+from keras.optimizers import Adam
+from keras.models import load_model
 import functions as f
 from collections import deque
-from tensorflow.keras.utils import plot_model
-import tensorflow.keras.backend as K
+from keras.utils import plot_model
+import keras.backend as K
 import numpy as np
 import random
 import imageprocessor as ip
@@ -31,10 +31,10 @@ class Memory:
 
     # Get random array of f_vector recieved from the according state and action
     def randomSample(self, count):
-        states = np.zeros((count, *self.stateShape))
+        states = np.zeros(((count,) + self.stateShape))
         measurements = np.zeros((count, self.mesCount))
         actions = np.zeros((count))
-        f_vec = np.zeros((count, self.mesCount, self.timesteps))
+        f_vec = np.zeros((count, self.mesCount * self.timesteps))
 
         randomInds = np.random.choice(len(self.mem)-(self.maxTimestep+1), count)
 
@@ -42,24 +42,24 @@ class Memory:
             if self.mem[ind][3]:
                 ind += 1
             isDone = False
-            future = np.zeros((self.timesteps, self.mesCount))
+            future = np.zeros((self.mesCount, self.timesteps))
             k = 0
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
-                    f = self.mem[ind+j][1] - self.mem[ind][1]
-                    future[k] = f
+                    for m in range(self.mesCount):
+                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
-                    f = self.mem[ind+offset][1] - self.mem[ind][1]
-                    future[k] = f
+                    for m in range(self.mesCount):
+                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
             actions[i]      = self.mem[ind][2]
-            f_vec[i]        = future.reshape((self.mesCount, self.timesteps))
+            f_vec[i]        = future.ravel(order='F')
 
         return states, measurements, actions, f_vec
 
@@ -73,28 +73,24 @@ class DFPAgent:
             self.encoder = load_model(encoderName)
         else:
             self.encoder = None
-        # If Imagedata is stacked to get some information of movement:
-        self.stackI = stackI
-        self.stackSize = stackSize
-        if stackI:
-            I_shape = np.prod(I_shape)
-            I_shape = (I_shape, stackSize)
-            self.previousStates = None
-
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
-        self.epsilonMin =       0.01
-        self.epsilonDecay =     0.99995
-        self.learningRate =     0.0001
-        self.minLearningRate =  0.00001
+        self.epsilon0 =         1.0
+        self.epsilonMin =       0.001
+        self.epsilonDecay =     20000
+        self.epsilonDecay2 =    50000
+        self.learningRate =     0.00015
+        self.learningRate2=     0.000005
+        self.maxLearningRate =  0.00015
+        self.minLearningRate =  0.000005
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
-        self.batchSize = 64
-        self.futureTargets = [4, 8, 16, 24, 32, 48]
-        self.startPoint = 3*self.futureTargets[-1]
-        self.splitImage = True
+        self.batchSize = 32
+        self.futureTargets = [2, 4, 8, 12, 16, 24]
+        self.startPoint = 1000
+        self.splitImage = False
         # Memory
-        self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
+        self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
         self.timesteps = len(self.futureTargets)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
 
@@ -116,47 +112,49 @@ class DFPAgent:
 
         else:
             print("Using Convolutional model")
-            i = Conv2D(32, (4, 4), activation='relu', padding='same')(input_Image)
-            i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(64, (2, 2), activation='relu', padding='same')(i)
-            i = MaxPooling2D((2,2), padding='same')(i)
-            i = Conv2D(128, (3, 3), activation='relu', padding='same')(i)
-            i = MaxPooling2D((2,2), padding='same')(i)
+            i = Conv2D(32, (8, 8), strides=(4, 4))(input_Image)
+            i = LeakyReLU()(i)
+            i = Conv2D(64, (4, 4), strides=(2, 2))(i)
+            i = LeakyReLU()(i)
+            i = Conv2D(64, (3, 3))(i)
+            i = LeakyReLU()(i)
             i = Flatten()(i)
-            i = Dense(1024, activation='relu')(i)
+            i = Dense(512, activation='relu')(i)
 
 
-        m = Flatten()(input_Measurement)
+        m = Dense(128)(input_Measurement)
+        m = LeakyReLU()(m)
+        m = Dense(128)(m)
+        m = LeakyReLU()(m)
         m = Dense(128, activation='relu')(m)
-        m = Dense(128, activation='relu')(m)
-        m = Dense(128, activation='linear')(m)
 
-        g = Flatten()(input_Goal)
+        g = Dense(128)(input_Goal)
+        g = LeakyReLU()(g)
+        g = Dense(128)(g)
+        g = LeakyReLU()(g)
         g = Dense(128, activation='relu')(g)
-        g = Dense(128, activation='relu')(g)
-        g = Dense(128, activation='linear')(g)
 
         merged = Concatenate()([i,m,g])
-        pred_size = self.actionCount * np.prod(M_shape) * self.timesteps
+        pred_size = np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(1024, activation='relu', name='expectation_1')(merged)
+        expectation = Dense(512, name='expectation_1')(merged)
+        expectation = LeakyReLU()(expectation)
         expectation = Dense(np.prod(M_shape)*self.timesteps \
-                    , activation='linear', name='expectation_2')(expectation)
-
-        expectation = Concatenate()([expectation]*self.actionCount)
+                    , activation='relu', name='expectation_2')(expectation)
 
         #Action stream
-        action = Dense(1024, activation='relu', name='action_1')(merged)
-        action = Dense(1024, activation='relu', name='action_3')(action)
-        action = Dense(pred_size, activation='linear', name='action_4')(action)
+        action = Dense(1024, name='action_1')(merged)
+        action = LeakyReLU()(action)
+        action = Dense(pred_size, activation='linear', name='action_3')(action)
         action = BatchNormalization()(action)
 
-        action_expectation = Add()([action, expectation])
+        pred_list = []
+        for i in range(self.actionCount):
+            action = Dense(pred_size, activation='relu', name=f'action{i}')(merged)
+            pred_list.append(Add()([action, expectation]))
 
-        output = Reshape((self.actionCount, M_shape[0], self.timesteps))(action_expectation)
-
-        model = Model(inputs=(input_Image, input_Measurement, input_Goal), outputs=output)
+        model = Model(input=[input_Image, input_Measurement, input_Goal], outputs=pred_list)
         opt = Adam(lr=self.learningRate)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
@@ -175,25 +173,29 @@ class DFPAgent:
     def remember(self, state, measurement, action, done):
         self.memory.append(state, measurement, action, done)
 
-    def printInfo(self, state, mes, action, f, f_target):
-            print(f"state: {state.shape}")
-            print(f"mes: {mes.shape}")
-            print(f"action: {action.shape}")
-            print(f"f: {f.shape}")
-            print(f"f_target: {f_target.shape}")
-
     def train(self, goal):
         if (self.memory.getSize() > self.startPoint):
             state, mes, action, f = self.memory.randomSample(self.batchSize)
-            f = self.useGoal(f, goal)
-            goal = np.repeat(np.array([goal]), self.batchSize, axis=0)
-            f_target = np.array(self.pred(state, mes, goal))
+            goal = np.tile(goal, (self.batchSize, 1))
+            f_target = self.pred(state, mes, goal)
             for i in range(self.batchSize):
-                f_target[i][int(action[i])] = f[i]
-            #self.printInfo(state, mes, action, f, f_target)
-            self.model.train_on_batch([state, mes, goal], f_target)
+                f_target[int(action[i])][i,:] = f[i]
+            
+            loss = self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
-                self.epsilon *= self.epsilonDecay
+                self.epsilon -= (self.epsilon0 - self.epsilonMin)/self.epsilonDecay
+            return loss
+
+    def pretrain(self, goal):
+        state, mes, action, f = self.memory.randomSample(self.batchSize)
+        #f = self.useGoal(f, goal)
+        goal = np.repeat(np.array([goal]), self.batchSize, axis=0)
+        f_target = self.pred(state, mes, goal)
+        for i in range(self.batchSize):
+            for k in range(self.actionCount):
+                f_target[k][i] = f[i]
+        return self.model.train_on_batch([state, mes, goal], f_target)
+    
 
     def actionToTurn(self, step):
         turn = (step)/int(self.actionCount/2) - 1
@@ -206,37 +208,32 @@ class DFPAgent:
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0,self.actionCount)
         prediction = np.array(self.pred(state, mes, np.array([goal])))
-        prediction = np.reshape(prediction, (self.actionCount, self.timesteps * self.mesCount))
+        prediction = np.vstack(prediction)
+        sums = np.sum(np.multiply(prediction, goal), axis=1)
+        """
+        print("-------prediction-----------")
+        print(prediction.shape)
+        print(prediction)
+        print("-------predictionsum-----------")
         prediction = np.sum(prediction, axis=1)
-        return np.argmax(prediction)
+        print(prediction)
+        print("---------------")
+        """
+        return np.argmax(sums)
 
     def decayLearningRate(self):
-        if self.learningRage > self.minLearningRate:
-            self.learningRate *= self.learningRateDecay
-            self.model.lr.assign(self.learningRate)
+        if self.learningRate > self.minLearningRate:
+            self.learningRate = self.maxLearningRate*self.epsilon
+            K.set_value(self.model.optimizer.lr, self.learningRate)
 
     def useGoal(self, f_vec, goal):
         for i in range(f_vec.shape[0]):
             f_vec[i] = f_vec[i]*goal
         return f_vec
 
-    def reshape(self, state, mes, reset=False):
-        if self.encoder != None:
-            state = self.encodeState(state)
-        if(reset == True and self.stackI):
-            self.previousStates = np.stack((state, state, state, state), axis=0)
-            self.previousStates = self.previousStates.reshape(1, state.shape[1], 4)
-            state = self.previousStates
-        elif self.stackI:
-            state = state.reshape(1, state.shape[1], 1)
-            self.previousStates = np.append(state, self.previousStates[:,:,:3], axis=2)
-            state = self.previousStates
-        else:
-            if(self.splitImage):
-                state = f.splitImage(state)
-            state = ip.normalize(state)
-            state = np.array([state])
-        mes = np.array(mes)
+    def reshape(self, state, mes):
+        state = ip.normalize(state)
+        #mes = np.array(mes)
         mes = mes.reshape((1, self.mesCount))
         return state, mes
 
