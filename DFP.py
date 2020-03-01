@@ -66,27 +66,24 @@ class Memory:
 
 class DFPAgent:
     # To stack the Image input, it must be a 1d vector representation of the image.
-    def __init__(self, num_actions, I_shape, M_shape, G_shape, \
-            encoderName=None, stackI=False, stackSize = 4):
+    def __init__(self, num_actions, I_shape, M_shape, G_shape, pred_v=[1, 2, 4, 8, 16, 32], \
+            encoded=False):
         # Possible pretrained encoder for Image data
-        if encoderName != None:
-            self.encoder = load_model(encoderName)
-        else:
-            self.encoder = None
+        self.encoded = encoded
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
         self.epsilon0 =         1.0
         self.epsilonMin =       0.001
         self.epsilonDecay =     20000
         self.epsilonDecay2 =    50000
-        self.learningRate =     0.00015
+        self.learningRate =     0.0001
         self.learningRate2=     0.000005
         self.maxLearningRate =  0.00015
         self.minLearningRate =  0.000005
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 32
-        self.futureTargets = [2, 4, 8, 12, 16, 24]
+        self.futureTargets = pred_v
         self.startPoint = 1000
         self.splitImage = False
         # Memory
@@ -102,7 +99,7 @@ class DFPAgent:
         input_Measurement = Input(shape=M_shape, name='measurements')
         input_Goal        = Input(shape=G_shape, name='goal')
 
-        if (self.encoder != None):
+        if (self.encoded):
             print("Using encoder model")
             i = Flatten()(input_Image)
             i = Dense(512, activation='relu')(i)
@@ -165,10 +162,6 @@ class DFPAgent:
         print(f"Epsilon: {self.epsilon}")
         print(f"Mem size: {self.memory.getSize()}")
         print(f"Learning rate: {self.learningRate}")
-
-    def encodeState(self, state):
-        state = np.array([ip.reshape(state)])
-        return np.array(self.encoder.predict(state))
 
     def remember(self, state, measurement, action, done):
         self.memory.append(state, measurement, action, done)
