@@ -47,14 +47,14 @@ class Memory:
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+j][1][0][m]# - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+offset][1][0][m]# - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
@@ -73,13 +73,13 @@ class DFPAgent:
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
         self.epsilon0 =         1.0
-        self.epsilonMin =       0.001
+        self.epsilonMin =       0.02
         self.epsilonDecay =     20000
         self.epsilonDecay2 =    50000
-        self.learningRate =     0.0001
+        self.learningRate =     0.00002
         self.learningRate2=     0.000005
         self.maxLearningRate =  0.00015
-        self.minLearningRate =  0.000005
+        self.minLearningRate =  0.00001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 32
@@ -87,7 +87,7 @@ class DFPAgent:
         self.startPoint = 1000
         self.splitImage = False
         # Memory
-        self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
+        self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
         self.timesteps = len(self.futureTargets)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
 
@@ -203,20 +203,12 @@ class DFPAgent:
         prediction = np.array(self.pred(state, mes, np.array([goal])))
         prediction = np.vstack(prediction)
         sums = np.sum(np.multiply(prediction, goal), axis=1)
-        """
-        print("-------prediction-----------")
-        print(prediction.shape)
-        print(prediction)
-        print("-------predictionsum-----------")
-        prediction = np.sum(prediction, axis=1)
-        print(prediction)
-        print("---------------")
-        """
+        
         return np.argmax(sums)
 
     def decayLearningRate(self):
-        if self.learningRate > self.minLearningRate:
-            self.learningRate = self.maxLearningRate*self.epsilon
+        if self.learningRate > self.minLearningRate and self.epsilon < 0.25:
+            self.learningRate = self.minLearningRate
             K.set_value(self.model.optimizer.lr, self.learningRate)
 
     def useGoal(self, f_vec, goal):
