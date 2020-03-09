@@ -42,7 +42,7 @@ avrgsteps = []
 
 env = gym.make("donkey-generated-track-v0")
 try:
-    for episode in range(2500):
+    for episode in range(2000):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
@@ -56,9 +56,11 @@ try:
             steps += 1
             t += 1
             if (t%f_vec[-1] == 0):
-                
                 print(f_vec[-1], " time: ", time.perf_counter() - tm)
                 tm = time.perf_counter()
+            if (t%2000):
+                done = True
+
             crash = 0
             action = agent.act(state, mes, goal)
             step = [agent.actionToTurn(action), 0.3]
@@ -73,24 +75,25 @@ try:
             mes = mes.reshape((1, 3))
             agent.remember(state, mes, action, done)
             agent.train(goal)
+
         print("Episode :", episode)
         agent.info()
         agent.save("Pretrained.h5")
-        if (episode%10 == 0):
-            avrgsteps.append(steps/5)
+        if (episode%20 == 0):
+            avrgsteps.append(int(steps/10))
             steps = 0
-            #agent.decayLearningRate()
-    agent.save("pretrained32.h5") 
+        if (episode%200 == 0 and agent.epsilon < 0.02):
+            agent.decayLearningRate()
+    agent.save("pretrained_encoder_32.h5") 
     plt.plot(avrgsteps)
+    plt.savefig("autoencoder_32.png")
+    a = np.asarray(avrgsteps)
+    np.savetxt("autoencoder_32.csv", a, delimiter=",")
     plt.show()
-    plt.savefig("average32.png")
-    a = np.array(avrgsteps)
-    np.savetxt("avg32.csv", a, delimiter=",")
 except:
-    agent.save("pretrained32.h5") 
+    agent.save("pretrained_encoder_32.h5") 
     plt.plot(avrgsteps)
+    plt.savefig("autoencoder_32.png")
+    a = np.asarray(avrgsteps)
+    np.savetxt("autoencoder_32.csv", a, delimiter=",")
     plt.show()
-    plt.savefig("average32.png")
-    a = np.array(avrgsteps)
-    np.savetxt("avg32.csv", a, delimiter=",")
-

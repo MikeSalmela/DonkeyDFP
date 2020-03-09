@@ -73,19 +73,18 @@ class DFPAgent:
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1.0
         self.epsilon0 =         1.0
-        self.epsilonMin =       0.02
+        self.epsilonMin =       0.001
         self.epsilonDecay =     20000
-        self.epsilonDecay2 =    50000
-        self.learningRate =     0.00002
-        self.learningRate2=     0.000005
+        self.learningRate =     0.00001
         self.maxLearningRate =  0.00015
-        self.minLearningRate =  0.00001
+        self.minLearningRate =  0.000002
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 32
         self.futureTargets = pred_v
         self.startPoint = 1000
         self.splitImage = False
+        self.secondPass = False
         # Memory
         self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
         self.timesteps = len(self.futureTargets)
@@ -177,6 +176,10 @@ class DFPAgent:
             loss = self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
                 self.epsilon -= (self.epsilon0 - self.epsilonMin)/self.epsilonDecay
+            if (self.epsilon < 0.05 and not self.secondPass):
+                self.secondPass = True
+                self.epsilon = 0.25
+                self.epsilonDecay *= 3
             return loss
 
     def pretrain(self, goal):
@@ -207,7 +210,7 @@ class DFPAgent:
         return np.argmax(sums)
 
     def decayLearningRate(self):
-        if self.learningRate > self.minLearningRate and self.epsilon < 0.25:
+        if self.learningRate > self.minLearningRate:
             self.learningRate = self.minLearningRate
             K.set_value(self.model.optimizer.lr, self.learningRate)
 
