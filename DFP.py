@@ -47,14 +47,14 @@ class Memory:
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+j][1][0][m]# - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+offset][1][0][m]# - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]

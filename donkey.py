@@ -42,7 +42,7 @@ avrgsteps = []
 
 env = gym.make("donkey-generated-track-v0")
 try:
-    for episode in range(2000):
+    for episode in range(1200):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
