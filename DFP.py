@@ -47,14 +47,14 @@ class Memory:
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+j][1][0][m]# - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+offset][1][0][m]# - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
@@ -74,7 +74,7 @@ class DFPAgent:
         self.epsilon =          1.0
         self.epsilon0 =         1.0
         self.epsilonMin =       0.001
-        self.epsilonDecay =     20000
+        self.epsilonDecay =     100000
         self.learningRate =     0.00001
         self.maxLearningRate =  0.00015
         self.minLearningRate =  0.000002
@@ -151,7 +151,7 @@ class DFPAgent:
             pred_list.append(Add()([action, expectation]))
 
         model = Model(input=[input_Image, input_Measurement, input_Goal], outputs=pred_list)
-        opt = Adam(lr=self.learningRate)
+        opt = Adam(lr=self.learningRate, decay=1e-6)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
         plot_model(model, to_file='DFPNetwork.png')
@@ -160,7 +160,8 @@ class DFPAgent:
     def info(self):
         print(f"Epsilon: {self.epsilon}")
         print(f"Mem size: {self.memory.getSize()}")
-        print(f"Learning rate: {self.learningRate}")
+        lr = self.model.optimizer.get_config()['learning_rate']
+        print(f"Learning rate: {lr}")
 
     def remember(self, state, measurement, action, done):
         self.memory.append(state, measurement, action, done)
@@ -194,8 +195,12 @@ class DFPAgent:
     
 
     def actionToTurn(self, step):
-        turn = (step)/int(self.actionCount/2) - 1
-        return turn
+        turn = step%3
+        turn = (turn) - 1
+        speed = 0.1
+        if (step >= 3):
+            speed = 0.6
+        return turn, speed
 
     def pred(self, state, mes, goal):
         return self.model.predict([state, mes, goal])

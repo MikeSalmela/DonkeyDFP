@@ -24,72 +24,72 @@ def modImg(img):
     return img.reshape((1, encoded, 1))
 
 def makeMes(info):
-    deviation = round(math.ceil(10 - info['cte']**2)/10, 1)
-    deviation = deviation if deviation > 0 else 0
+    deviation = round((info['cte']**2)/10, 1)
     pos = round((info['cte']*2)/10, 1)
-    return deviation, pos
+    speed = round(info['speed']/10, 1)
+    return deviation, pos, speed
 imgFrames = 4
 speed = 0.3
 f_vec = [1, 2, 4, 8, 16, 32]
 l = len(f_vec)
-agent = DFPAgent(3, (encoded, imgFrames), (3,), (3*l,), f_vec, True)
+mes_c = 4
+agent = DFPAgent(6, (encoded, imgFrames), (mes_c,), (mes_c*l,), f_vec, True)
 
 os.environ['DONKEY_SIM_PATH'] = "/home/walker/Programs/DonkeySimLinux/donkey_sim.x86_64"
 os.environ['DONKEY_SIM_PORT'] = str(9091)
 os.environ['DONKEY_SIM_HEADLESS'] = str(0) # "1" is headless
 steps = 0
 avrgsteps = []
-
 env = gym.make("donkey-generated-track-v0")
-try:
-    for episode in range(1200):
-        img = modImg(env.reset())
-        state = np.stack([img]*imgFrames, axis=2)
-        state = state.reshape((1, encoded, imgFrames))
-        mes = np.array([1, 1, 0])
-        mes = mes.reshape((1,3))
-        goal = np.array([0.3, 1, -1]*l)
-        t = 0
-        done = False
-        tm = time.perf_counter()
-        while not done:
-            steps += 1
-            t += 1
-            if (t%f_vec[-1] == 0):
-                print(f_vec[-1], " time: ", time.perf_counter() - tm)
-                tm = time.perf_counter()
-            if (t%2000):
-                done = True
+#try:
+for episode in range(5000):
+    img = modImg(env.reset())
+    state = np.stack([img]*imgFrames, axis=2)
+    state = state.reshape((1, encoded, imgFrames))
+    mes = np.array([1, 1, 0, 0])
+    mes = mes.reshape((1,mes_c))
+    goal = np.array([-1, 0.8, -1, 0.5]*l)
+    t = 0
+    done = False
+    tm = time.perf_counter()
+    while not done:
+        steps += 1
+        t += 1
+        if (t%f_vec[-1] == 0):
+            print(f_vec[-1], " time: ", time.perf_counter() - tm)
+            tm = time.perf_counter()
+        if (t%2000):
+            done = True
 
-            crash = 0
-            action = agent.act(state, mes, goal)
-            step = [agent.actionToTurn(action), 0.3]
-            img, reward, done, info = env.step(step)
-            img = modImg(img)
-            state = np.append(img, state[:,:,:imgFrames-1], axis=2)
-            deviation, pos = makeMes(info)
-            if done:
-                crash = 10
-            mes = np.array([deviation, reward, crash])
-            #print(mes)
-            mes = mes.reshape((1, 3))
-            agent.remember(state, mes, action, done)
-            agent.train(goal)
+        crash = 0
+        action = agent.act(state, mes, goal)
+        turn, speed = agent.actionToTurn(action)
+        step = [turn, speed]
+        img, reward, done, info = env.step(step)
+        img = modImg(img)
+        state = np.append(img, state[:,:,:imgFrames-1], axis=2)
+        deviation, pos, speed = makeMes(info)
+        if done:
+            crash = 10
+        mes = np.array([deviation, reward, crash, speed])
+        #print(mes)
+        mes = mes.reshape((1, mes_c))
+        agent.remember(state, mes, action, done)
+        agent.train(goal)
 
-        print("Episode :", episode)
-        agent.info()
-        agent.save("Pretrained.h5")
-        if (episode%20 == 0):
-            avrgsteps.append(int(steps/10))
-            steps = 0
-        if (episode%200 == 0 and agent.epsilon < 0.02):
-            agent.decayLearningRate()
-    agent.save("pretrained_encoder_32.h5") 
-    plt.plot(avrgsteps)
-    plt.savefig("autoencoder_32.png")
-    a = np.asarray(avrgsteps)
-    np.savetxt("autoencoder_32.csv", a, delimiter=",")
-    plt.show()
+    print("Episode :", episode)
+    agent.info()
+    agent.save("Pretrained.h5")
+    if (episode%20 == 0):
+        avrgsteps.append(int(steps/10))
+        steps = 0
+agent.save("pretrained_encoder_32.h5") 
+plt.plot(avrgsteps)
+plt.savefig("autoencoder_32.png")
+a = np.asarray(avrgsteps)
+np.savetxt("autoencoder_32.csv", a, delimiter=",")
+plt.show()
+"""
 except:
     agent.save("pretrained_encoder_32.h5") 
     plt.plot(avrgsteps)
@@ -97,3 +97,4 @@ except:
     a = np.asarray(avrgsteps)
     np.savetxt("autoencoder_32.csv", a, delimiter=",")
     plt.show()
+"""
