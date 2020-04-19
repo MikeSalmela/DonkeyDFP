@@ -74,8 +74,8 @@ for episode in range(5000):
         mes = np.array([deviation, reward, crash, speed])
         #print(mes)
         mes = mes.reshape((1, mes_c))
-        agent.remember(state, mes, action, done)
-        agent.train(goal)
+        agent.remember(state, mes, action, done, goal)
+        agent.train()
 
     print("Episode :", episode)
     agent.info()

@@ -23,8 +23,8 @@ class Memory:
         self.maxTimestep = futureVec[-1]
         self.mem = deque(maxlen=maxSize)
 
-    def append(self, state, measurement, action, done):
-        self.mem.append((state, measurement, action, done))
+    def append(self, state, measurement, action, done, goal):
+        self.mem.append((state, measurement, action, done, goal))
 
     def getSize(self):
         return len(self.mem)
@@ -35,7 +35,7 @@ class Memory:
         measurements = np.zeros((count, self.mesCount))
         actions = np.zeros((count))
         f_vec = np.zeros((count, self.mesCount * self.timesteps))
-
+        goals = np.zeros((count, self.mesCount * self.timesteps))
         randomInds = np.random.choice(len(self.mem)-(self.maxTimestep+1), count)
 
         for i, ind in enumerate(randomInds):
@@ -60,8 +60,9 @@ class Memory:
             measurements[i] = self.mem[ind][1]
             actions[i]      = self.mem[ind][2]
             f_vec[i]        = future.ravel(order='F')
-
-        return states, measurements, actions, f_vec
+            goals[i]        = self.mem[ind][4]
+        print(goals.shape)    
+        return states, measurements, actions, f_vec, goals
 
 
 class DFPAgent:
@@ -82,7 +83,7 @@ class DFPAgent:
         self.actionCount = num_actions
         self.batchSize = 32
         self.futureTargets = pred_v
-        self.startPoint = 1000
+        self.startPoint = 100
         self.splitImage = False
         self.secondPass = False
         # Memory
@@ -163,13 +164,13 @@ class DFPAgent:
         lr = self.model.optimizer.get_config()['learning_rate']
         print(f"Learning rate: {lr}")
 
-    def remember(self, state, measurement, action, done):
-        self.memory.append(state, measurement, action, done)
+    def remember(self, state, measurement, action, done, goal):
+        self.memory.append(state, measurement, action, done, goal)
 
-    def train(self, goal):
+    def train(self):
         if (self.memory.getSize() > self.startPoint):
-            state, mes, action, f = self.memory.randomSample(self.batchSize)
-            goal = np.tile(goal, (self.batchSize, 1))
+            state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
+            #goal = np.tile(goal, (self.batchSize, 1))
             f_target = self.pred(state, mes, goal)
             for i in range(self.batchSize):
                 f_target[int(action[i])][i,:] = f[i]
