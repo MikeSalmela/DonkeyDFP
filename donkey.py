@@ -31,7 +31,7 @@ imgFrames = 4
 speed = 0.3
 f_vec = [1, 2, 4, 8, 16, 32]
 l = len(f_vec)
-mes_c = 3
+mes_c = 4
 agent = DFPAgent(3, (encoded, imgFrames), (mes_c,), (mes_c*l,), f_vec, True)
 
 os.environ['DONKEY_SIM_PATH'] = "/home/walker/Programs/DonkeySimLinux/donkey_sim.x86_64"
@@ -45,9 +45,9 @@ for episode in range(5000):
     img = modImg(env.reset())
     state = np.stack([img]*imgFrames, axis=2)
     state = state.reshape((1, encoded, imgFrames))
-    mes = np.array([1, 1, 0])
+    mes = np.array([1, 1, 0, 0])
     mes = mes.reshape((1,mes_c))
-    goal = np.array([-1, -5, 0.5]*l)
+    goal = np.array([-1, 0.8, -1, 0.5]*l)
     t = 0
     done = False
     tm = time.perf_counter()
@@ -69,8 +69,8 @@ for episode in range(5000):
         state = np.append(img, state[:,:,:imgFrames-1], axis=2)
         deviation, speed = makeMes(info)
         if done:
-            crash = 1
-        mes = np.array([deviation, crash, speed])
+            crash = 10
+        mes = np.array([deviation, reward, crash, speed])
         mes = mes.reshape((1, mes_c))
         agent.remember(state, mes, action, done, goal)
 
