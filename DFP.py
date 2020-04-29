@@ -1,15 +1,15 @@
 #import tensorflow.keras
-from tensorflow.keras.models import Model
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
-from tensorflow.keras.layers import BatchNormalization, Reshape, Subtract, Add
-from tensorflow.keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import load_model
+from keras.models import Model
+from keras.models import Sequential
+from keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
+from keras.layers import BatchNormalization, Reshape, Subtract, Add
+from keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
+from keras.optimizers import Adam
+from keras.models import load_model
 import functions as f
 from collections import deque
-from tensorflow.keras.utils import plot_model
-import tensorflow.keras.backend as K
+from keras.utils import plot_model
+import keras.backend as K
 import numpy as np
 import random
 import imageprocessor as ip
@@ -148,6 +148,7 @@ class DFPAgent:
         predictions = []
         for i in range(self.actionCount):
             action = Lambda(lambda x: x[:,i,:])(actions)
+            #action = Dense(pred_size, activation='relu')(merged)
             out = Add()([action, expectation])
             predictions.append(out)
 
