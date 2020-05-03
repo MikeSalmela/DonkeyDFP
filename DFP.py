@@ -61,7 +61,7 @@ class Memory:
             actions[i]      = self.mem[ind][2]
             f_vec[i]        = future.ravel(order='F')
             goals[i]        = self.mem[ind][4]
-        print(goals.shape)    
+        #print(goals.shape)    
         return states, measurements, actions, f_vec, goals
 
 
@@ -144,11 +144,14 @@ class DFPAgent:
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_2')(actions)
         actions = Reshape((self.actionCount, pred_size))(actions)
         actions = BatchNormalization()(actions)
-        
+        """
+        actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
+        actions = Reshape((self.actionCount, pred_size))(actions)
+        """
+
         predictions = []
         for i in range(self.actionCount):
             action = Lambda(lambda x: x[:,i,:])(actions)
-            #action = Dense(pred_size, activation='relu')(merged)
             out = Add()([action, expectation])
             predictions.append(out)
 
