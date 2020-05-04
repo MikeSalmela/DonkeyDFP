@@ -2,7 +2,7 @@
 from keras.models import Model
 from keras.models import Sequential
 from keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
-from keras.layers import BatchNormalization, Reshape, Subtract, Add
+from keras.layers import BatchNormalization, Reshape, Subtract, Add, RepeatVector
 from keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
 from keras.optimizers import Adam
 from keras.models import load_model
@@ -76,7 +76,7 @@ class DFPAgent:
         self.epsilon0 =         1.0
         self.epsilonMin =       0.001
         self.epsilonDecay =     30000
-        self.learningRate =     0.00001
+        self.learningRate =     0.0001
         self.maxLearningRate =  0.00015
         self.minLearningRate =  0.000002
         self.learningRateDecay= 0.9995
@@ -136,19 +136,21 @@ class DFPAgent:
         expectation = Dense(512, name='Expectation_1')(merged)
         expectation = LeakyReLU()(expectation)
         expectation = Dense(pred_size \
-                    , activation='relu', name='Expectation_2')(expectation)
-
+                    , activation='linear', name='Expectation_2')(expectation)
+        
         #Action stream
         actions = Dense(1024, name='Action_1')(merged)
         actions = LeakyReLU()(actions)
-        actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_2')(actions)
-        actions = Reshape((self.actionCount, pred_size))(actions)
+        actions = Dense(self.actionCount*pred_size,activation='linear', name='Action_2')(actions)
         actions = BatchNormalization()(actions)
+        actions = Reshape((self.actionCount, pred_size))(actions)
         """
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
         actions = Reshape((self.actionCount, pred_size))(actions)
         """
-
+        """
+        predictions = Add()([actions, expectation])
+        """
         predictions = []
         for i in range(self.actionCount):
             action = Lambda(lambda x: x[:,i,:])(actions)
@@ -176,7 +178,7 @@ class DFPAgent:
             state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
             f_target = self.pred(state, mes, goal)
             for i in range(self.batchSize):
-                f_target[int(action[i])][i, :] = f[i]
+                f_target[int(action[i]), i, :] = f[i]
             
             loss = self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
@@ -197,29 +199,16 @@ class DFPAgent:
     def act(self, state, mes, goal):
         self.train()
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
-            return random.randrange(0,self.actionCount)
+            return random.randrange(0, self.actionCount)
         prediction = np.array(self.pred(state, mes, np.array([goal])))
         prediction = np.vstack(prediction)
         sums = np.sum(np.multiply(prediction, goal), axis=1)
-        
-
         return np.argmax(sums)
 
     def decayLearningRate(self):
         if self.learningRate > self.minLearningRate:
             self.learningRate = self.minLearningRate
             K.set_value(self.model.optimizer.lr, self.learningRate)
-
-    def useGoal(self, f_vec, goal):
-        for i in range(f_vec.shape[0]):
-            f_vec[i] = f_vec[i]*goal
-        return f_vec
-
-    def reshape(self, state, mes):
-        state = ip.normalize(state)
-        #mes = np.array(mes)
-        mes = mes.reshape((1, self.mesCount))
-        return state, mes
 
     def load(self, name):
         self.model.load_weights(name)
