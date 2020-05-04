@@ -142,7 +142,7 @@ class DFPAgent:
         actions = Dense(1024, name='Action_1')(merged)
         actions = LeakyReLU()(actions)
         actions = Dense(self.actionCount*pred_size,activation='linear', name='Action_2')(actions)
-        actions = BatchNormalization()(actions)
+        #actions = BatchNormalization()(actions)
         actions = Reshape((self.actionCount, pred_size))(actions)
         """
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
@@ -178,7 +178,7 @@ class DFPAgent:
             state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
             f_target = self.pred(state, mes, goal)
             for i in range(self.batchSize):
-                f_target[int(action[i]), i, :] = f[i]
+                f_target[int(action[i])][i, :] = f[i]
             
             loss = self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
