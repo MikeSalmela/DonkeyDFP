@@ -82,6 +82,8 @@ for episode in range(1500):
     steps = 0
     if (episode%20 == 0):
         agent.save("Pretrained.h5")
+    if (episode == 150):
+        agent.decayLearningRate()
 
 agent.save("pretrained_encoder_32.h5") 
 plt.plot(avrgsteps)

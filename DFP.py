@@ -47,14 +47,14 @@ class Memory:
             for j in range(self.maxTimestep+1):
                 if not self.mem[ind+j][3] and (j in self.futurePreds) and not isDone:
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+j][1][0][m]# - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+j][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
                 elif (j in self.futurePreds):
                     if not isDone:
                         offset = j
                     isDone = True
                     for m in range(self.mesCount):
-                        future[m][k] = self.mem[ind+offset][1][0][m]# - self.mem[ind][1][0][m]
+                        future[m][k] = self.mem[ind+offset][1][0][m] - self.mem[ind][1][0][m]
                     k += 1
             states[i]       = self.mem[ind][0]
             measurements[i] = self.mem[ind][1]
@@ -78,7 +78,7 @@ class DFPAgent:
         self.epsilonDecay =     30000
         self.learningRate =     0.0001
         self.maxLearningRate =  0.00015
-        self.minLearningRate =  0.000002
+        self.minLearningRate =  0.00001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 32
@@ -142,7 +142,7 @@ class DFPAgent:
         actions = Dense(1024, name='Action_1')(merged)
         actions = LeakyReLU()(actions)
         actions = Dense(self.actionCount*pred_size,activation='linear', name='Action_2')(actions)
-        #actions = BatchNormalization()(actions)
+        actions = BatchNormalization()(actions)
         actions = Reshape((self.actionCount, pred_size))(actions)
         """
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
