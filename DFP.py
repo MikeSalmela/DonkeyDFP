@@ -142,7 +142,7 @@ class DFPAgent:
         actions = Dense(1024, name='Action_1')(merged)
         actions = LeakyReLU()(actions)
         actions = Dense(self.actionCount*pred_size,activation='linear', name='Action_2')(actions)
-        actions = BatchNormalization()(actions)
+        #actions = BatchNormalization()(actions)
         actions = Reshape((self.actionCount, pred_size))(actions)
         """
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
