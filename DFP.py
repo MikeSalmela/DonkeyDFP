@@ -188,7 +188,7 @@ class DFPAgent:
     def actionToTurn(self, step):
         turn = step%3
         turn = (turn) - 1
-        speed = 0.4
+        speed = 0.2
         if (step >= 3):
             speed = 0.6
         return turn, speed
