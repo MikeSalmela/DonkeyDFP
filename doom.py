@@ -12,6 +12,9 @@ imgShape = (84, 84)
 def modImg(img):
     img = np.rollaxis(img, 0, 3)    # It becomes (640, 480, 3)
     img = skimage.transform.resize(img, imgShape)
+    #print(img)
+    #cv2.imwrite("test.png", np.asarray(img)*255)
+    #return np.reshape(img , (1, *img.shape))
     return skimage.color.rgb2gray(img)
 
     #img = skimage.color.rgb2gray(img)
@@ -21,8 +24,8 @@ def modImg(img):
 
 def append(x, a):
     x = np.reshape(x, (1, *imgShape, 1))
-    a = np.reshape(a, (1, *imgShape, 4))
-    return np.append(x, a[:, :, :, :3], axis=3)
+    a = np.reshape(a, (1, *imgShape, 3))
+    return np.append(x, a[:, :, :, :2], axis=3)
 
 def addImg(s, x):
     x = modImg(x)
@@ -44,8 +47,9 @@ game.set_screen_resolution(vizdoom.ScreenResolution.RES_640X480)
 game.set_window_visible(True)
 game.init()
 
-agent = DFPAgent(3, (*imgShape, 4), (3,), (3*6,))
+agent = DFPAgent(3, (*imgShape, 3), (3,), (3*6,))
 lifes = []
+m_steps = 0
 medkits = []
 try:
     for episode in range(5000):
@@ -56,14 +60,15 @@ try:
         health = state.game_variables[0]
         medkit = 0
         poison = 0
-        img = modImg(state.screen_buffer)
-        s = np.stack([img]*4)
+        s = modImg(state.screen_buffer)
+        s = np.stack([s]*3)
         s = addImg(s, state.screen_buffer) 
         m = np.array([health/30.0, medkit/10.0, poison])
         g = np.array([1.0, 1.0, -1.0]*6)
         m = m.reshape((1,3))
 
         while not done:
+            m_steps += 1
             lifetime += 1
             action = agent.act(s, m, g)
             game.set_action(actionToInput(action))
@@ -78,6 +83,7 @@ try:
                     print("Poison")
                     poison += 1
                 health = state.game_variables[0]
+                #s = modImg(state.screen_buffer)
                 s = addImg(s, state.screen_buffer)
             m = np.array([health/30.0, medkit/10.0, poison])
             m = m.reshape((1,3))
@@ -88,13 +94,14 @@ try:
         agent.info()
         print(f"Episode: {episode}")
         print(f"Loss: {loss}")
+        print(m_steps)
         if episode == 200:
             agent.decayLearningRate()
-    
+
     a = np.asarray(medkits)
     np.savetxt("medkits.csv", a, delimiter=",")
-    a = np.asarray(lifetime)
-    np.savetxt("doom.csv", a, delimiter=",")
+    b = np.asarray(lifes)
+    np.savetxt("doom.csv", b, delimiter=",")
 
 except:
     plt.plot(lifes)
@@ -102,5 +109,5 @@ except:
 
     a = np.asarray(medkits)
     np.savetxt("medkits.csv", a, delimiter=",")
-    a = np.asarray(lifetime)
+    a = np.asarray(lifes)
     np.savetxt("doom.csv", a, delimiter=",")
