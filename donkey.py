@@ -39,9 +39,10 @@ os.environ['DONKEY_SIM_PORT'] = str(9091)
 os.environ['DONKEY_SIM_HEADLESS'] = str(0) # "1" is headless
 steps = 0
 avrgsteps = []
+steps_total = 0
 env = gym.make("donkey-generated-track-v0")
 try:
-    for episode in range(3000):
+    for episode in range(10000):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
@@ -53,13 +54,15 @@ try:
         done = False
         tm = time.perf_counter()
         while not done:
+            steps_total += 1
+            if (steps_total % 32 == 0):
+                agent.train()
             steps += 1
             t += 1
             if (t%f_vec[-1] == 0):
                 print(f_vec[-1], " time: ", time.perf_counter() - tm)
                 tm = time.perf_counter()
-            if (t%2000):
-                done = True
+
 
             crash = 0
             action = agent.act(state, mes, goal)
@@ -68,10 +71,15 @@ try:
             img, reward, done, info = env.step(step)
             img = modImg(img)
             state = np.append(img, state[:,:,:imgFrames-1], axis=2)
+                       
             deviation, speed = makeMes(info)
             if done:
                 crash = 1
             mes = np.array([deviation, reward, crash, speed])
+            
+            if (t == 2000):
+                done = True 
+
             mes = mes.reshape((1, mes_c))
             agent.remember(state, mes, action, done, goal)
 
@@ -82,17 +90,17 @@ try:
         steps = 0
         if (episode%20 == 0):
             agent.save("Pretrained.h5")
-        if (episode == 150):
+        if (episode % 50 == 0):
             agent.decayLearningRate()
 
-    agent.save("pretrained_encoder_32.h5") 
+    agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)
     plt.savefig("autoencoder_32.png")
     a = np.asarray(avrgsteps)
     np.savetxt("autoencoder_32.csv", a, delimiter=",")
     plt.show()
 except:
-    agent.save("pretrained_encoder_32.h5") 
+    agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)
     plt.savefig("autoencoder_32.png")
     a = np.asarray(avrgsteps)

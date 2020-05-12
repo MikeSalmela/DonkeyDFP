@@ -13,6 +13,7 @@ import keras.backend as K
 import numpy as np
 import random
 import imageprocessor as ip
+import threading
 
 class Memory:
     def __init__(self, futureVec, mesCount, maxSize, stateShape):
@@ -22,15 +23,19 @@ class Memory:
         self.mesCount = mesCount
         self.maxTimestep = futureVec[-1]
         self.mem = deque(maxlen=maxSize)
+        self.lock = threading.Lock()
 
     def append(self, state, measurement, action, done, goal):
+        self.lock.acquire() 
         self.mem.append((state, measurement, action, done, goal))
+        self.lock.release() 
 
     def getSize(self):
         return len(self.mem)
 
     # Get random array of f_vector recieved from the according state and action
     def randomSample(self, count):
+        self.lock.acquire() 
         states = np.zeros(((count,) + self.stateShape))
         measurements = np.zeros((count, self.mesCount))
         actions = np.zeros((count))
@@ -62,6 +67,7 @@ class Memory:
             f_vec[i]        = future.ravel(order='F')
             goals[i]        = self.mem[ind][4]
         #print(goals.shape)    
+        self.lock.release() 
         return states, measurements, actions, f_vec, goals
 
 
@@ -72,20 +78,23 @@ class DFPAgent:
         # Possible pretrained encoder for Image data
         self.encoded = encoded
         self.mesCount = np.prod(M_shape)
-        self.epsilon =          1.0
-        self.epsilon0 =         1.0
-        self.epsilonMin =       0.001
-        self.epsilonDecay =     30000
+        self.epsilon =          1
+        self.epsilon0 =         1
+        self.epsilonMin =       0.01
+        self.epsilonDecay =     2000
         self.learningRate =     0.0001
         self.maxLearningRate =  0.00015
-        self.minLearningRate =  0.00001
+        self.minLearningRate =  0.000007
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
-        self.batchSize = 32
+        self.batchSize = 64
         self.futureTargets = pred_v
         self.startPoint = 100
+        self.train_cycle = 32
+        self.lock = threading.Lock()
+        self.trains = 0
         # Memory
-        self.memory = Memory(self.futureTargets, np.prod(M_shape), 30000, I_shape)
+        self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
         self.timesteps = len(self.futureTargets)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
 
@@ -174,16 +183,21 @@ class DFPAgent:
         self.memory.append(state, measurement, action, done, goal)
 
     def train(self):
+        self.lock.acquire() 
         if (self.memory.getSize() > self.startPoint):
             state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
             f_target = self.pred(state, mes, goal)
             for i in range(self.batchSize):
                 f_target[int(action[i])][i, :] = f[i]
             
+            self.trains += 1
             loss = self.model.train_on_batch([state, mes, goal], f_target)
             if self.epsilon > self.epsilonMin:
-                self.epsilon -= (self.epsilon0 - self.epsilonMin)/self.epsilonDecay
+                self.epsilon *= 0.999
+                #self.epsilon -= (self.epsilon0 - self.epsilonMin)/self.epsilonDecay
+            self.lock.release() 
             return loss
+        self.lock.release() 
 
     def actionToTurn(self, step):
         turn = step%3
@@ -197,17 +211,18 @@ class DFPAgent:
         return self.model.predict([state, mes, goal])
 
     def act(self, state, mes, goal):
-        self.train()
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0, self.actionCount)
+        self.lock.acquire() 
         prediction = np.array(self.pred(state, mes, np.array([goal])))
         prediction = np.vstack(prediction)
         sums = np.sum(np.multiply(prediction, goal), axis=1)
+        self.lock.release() 
         return np.argmax(sums)
 
     def decayLearningRate(self):
         if self.learningRate > self.minLearningRate:
-            self.learningRate = self.minLearningRate
+            self.learningRate *= 0.8
             K.set_value(self.model.optimizer.lr, self.learningRate)
 
     def load(self, name):
