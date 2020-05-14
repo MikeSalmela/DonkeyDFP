@@ -90,8 +90,11 @@ try:
         steps = 0
         if (episode%20 == 0):
             agent.save("Pretrained.h5")
-        if (episode % 50 == 0):
+        if (episode%1000 == 0):
             agent.decayLearningRate()
+
+        a = np.asarray(avrgsteps)
+        np.savetxt("autoencoder_32.csv", a, delimiter=",")
 
     agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)

@@ -1,15 +1,15 @@
 #import tensorflow.keras
-from keras.models import Model
-from keras.models import Sequential
-from keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten
-from keras.layers import BatchNormalization, Reshape, Subtract, Add, RepeatVector
-from keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
-from keras.optimizers import Adam
-from keras.models import load_model
+from tensorflow.keras.models import Model
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten, Multiply
+from tensorflow.keras.layers import BatchNormalization, Reshape, Subtract, Add, RepeatVector
+from tensorflow.keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import load_model
 import functions as f
 from collections import deque
-from keras.utils import plot_model
-import keras.backend as K
+from tensorflow.keras.utils import plot_model
+import tensorflow.keras.backend as K
 import numpy as np
 import random
 import imageprocessor as ip
@@ -26,16 +26,17 @@ class Memory:
         self.lock = threading.Lock()
 
     def append(self, state, measurement, action, done, goal):
-        self.lock.acquire() 
         self.mem.append((state, measurement, action, done, goal))
-        self.lock.release() 
+
+    def appendBatch(self, batch):
+        for i in range(len(batch)):
+            self.mem.append((batch[i][0], batch[i][1], batch[i][2], batch[i][3], batch[i][4]))
 
     def getSize(self):
         return len(self.mem)
 
     # Get random array of f_vector recieved from the according state and action
     def randomSample(self, count):
-        self.lock.acquire() 
         states = np.zeros(((count,) + self.stateShape))
         measurements = np.zeros((count, self.mesCount))
         actions = np.zeros((count))
@@ -65,26 +66,27 @@ class Memory:
             measurements[i] = self.mem[ind][1]
             actions[i]      = self.mem[ind][2]
             f_vec[i]        = future.ravel(order='F')
+            #print(f_vec[i])
             goals[i]        = self.mem[ind][4]
         #print(goals.shape)    
-        self.lock.release() 
         return states, measurements, actions, f_vec, goals
 
 
 class DFPAgent:
     # To stack the Image input, it must be a 1d vector representation of the image.
     def __init__(self, num_actions, I_shape, M_shape, G_shape, pred_v=[1, 2, 4, 8, 16, 32], \
-            encoded=False):
+            encoded=False, name=""):
         # Possible pretrained encoder for Image data
+        print("Create agent")
         self.encoded = encoded
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1
         self.epsilon0 =         1
-        self.epsilonMin =       0.01
+        self.epsilonMin =       0.05
         self.epsilonDecay =     2000
-        self.learningRate =     0.0001
-        self.maxLearningRate =  0.00015
-        self.minLearningRate =  0.000007
+        self.learningRate =     0.00001
+        self.maxLearningRate =  0.00001
+        self.minLearningRate =  0.000005
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
@@ -96,6 +98,7 @@ class DFPAgent:
         # Memory
         self.memory = Memory(self.futureTargets, np.prod(M_shape), 20000, I_shape)
         self.timesteps = len(self.futureTargets)
+        self.predSize = self.timesteps * np.prod(M_shape)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
 
 
@@ -138,21 +141,22 @@ class DFPAgent:
         g = LeakyReLU()(g)
         g = Dense(128, activation='relu')(g)
 
-        merged = Concatenate()([i,m,g])
+        j = Concatenate()([i,m,g])
         pred_size = np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(512, name='Expectation_1')(merged)
+        expectation = Dense(512, name='Expectation_1')(j)
         expectation = LeakyReLU()(expectation)
         expectation = Dense(pred_size \
                     , activation='linear', name='Expectation_2')(expectation)
-        
+        expectation = Concatenate()([expectation]*self.actionCount)
+
         #Action stream
-        actions = Dense(1024, name='Action_1')(merged)
+        actions = Dense(1024, name='Action_1')(j)
         actions = LeakyReLU()(actions)
-        actions = Dense(self.actionCount*pred_size,activation='linear', name='Action_2')(actions)
+        actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_2')(actions)
         #actions = BatchNormalization()(actions)
-        actions = Reshape((self.actionCount, pred_size))(actions)
+        #actions = Reshape((self.actionCount, pred_size))(actions)
         """
         actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
         actions = Reshape((self.actionCount, pred_size))(actions)
@@ -160,13 +164,22 @@ class DFPAgent:
         """
         predictions = Add()([actions, expectation])
         """
+        """
         predictions = []
         for i in range(self.actionCount):
-            action = Lambda(lambda x: x[:,i,:])(actions)
+            #action = Lambda(lambda x: x[:,i,:])(actions)
+            action = Dense(pred_size, activation='relu')(merged)
             out = Add()([action, expectation])
             predictions.append(out)
+        """
 
-        model = Model([input_Image, input_Measurement, input_Goal], predictions)
+        predictions = Add()([actions, expectation])
+        predictions = Reshape((self.actionCount, pred_size))(predictions)
+        Mask_shape = (self.actionCount, pred_size)
+        input_mask = Input(shape=Mask_shape, name='mask_input')
+        predictions = Multiply()([predictions, input_mask])
+
+        model = Model([input_Image, input_Measurement, input_Goal, input_mask], predictions)
         opt = Adam(lr=self.learningRate, decay=1e-6)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
@@ -182,20 +195,31 @@ class DFPAgent:
     def remember(self, state, measurement, action, done, goal):
         self.memory.append(state, measurement, action, done, goal)
 
+    def rememberBatch(self, batch):
+        self.lock.acquire()
+        self.memory.appendBatch(batch)
+        self.lock.release()
+    
     def train(self):
-        self.lock.acquire() 
+        self.lock.acquire()
         if (self.memory.getSize() > self.startPoint):
             state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
-            f_target = self.pred(state, mes, goal)
+            #f_target = self.lpred(state, mes, goal)
+            f_target = np.zeros((self.batchSize, self.actionCount, self.predSize))
+            mask = np.zeros((self.batchSize, self.actionCount, self.predSize))
+            #print(f_target.shape)
+
             for i in range(self.batchSize):
-                f_target[int(action[i])][i, :] = f[i]
-            
+                f_target[i][int(action[i])][:] = f[i]
+                mask[i] = self.makeMask(action[i])
+                #print(mask[i])
+            #print("f_target")
+            #print(f_target[0]) 
             self.trains += 1
-            loss = self.model.train_on_batch([state, mes, goal], f_target)
-            if self.epsilon > self.epsilonMin:
-                self.epsilon *= 0.999
-                #self.epsilon -= (self.epsilon0 - self.epsilonMin)/self.epsilonDecay
+            loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
             self.lock.release() 
+            if self.epsilon > self.epsilonMin:
+                self.epsilon *= 0.99#9#6
             return loss
         self.lock.release() 
 
@@ -207,23 +231,42 @@ class DFPAgent:
             speed = 0.6
         return turn, speed
 
+    def lpred(self, state, mes, goal):
+        return self.model.predict([state, mes, goal, self.makeOnes()])
+
+
     def pred(self, state, mes, goal):
-        return self.model.predict([state, mes, goal])
+        self.lock.acquire() 
+        pred = self.model.predict([state, mes, goal, self.makeOnes()])
+        self.lock.release() 
+        return pred
 
     def act(self, state, mes, goal):
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0, self.actionCount)
         self.lock.acquire() 
-        prediction = np.array(self.pred(state, mes, np.array([goal])))
+        prediction = np.array(self.lpred(state, mes, np.array([goal])))
         prediction = np.vstack(prediction)
+        #print(prediction.shape)
+        #print(prediction)
+        #mp = np.multiply(prediction, goal)
+        #print("multiply")
+        #print(mp)
         sums = np.sum(np.multiply(prediction, goal), axis=1)
+        #print("sums")
+        #print(sums)
         self.lock.release() 
         return np.argmax(sums)
 
     def decayLearningRate(self):
+        self.lock.acquire()
         if self.learningRate > self.minLearningRate:
-            self.learningRate *= 0.8
-            K.set_value(self.model.optimizer.lr, self.learningRate)
+            if self.learningRate < 0.00001:
+                self.learningRate *= 0.99
+            else:
+                self.learningRate *= 0.9
+            self.model.optimizer.lr.assign(self.learningRate)
+        self.lock.release()
 
     def load(self, name):
         self.model.load_weights(name)
@@ -231,4 +274,10 @@ class DFPAgent:
     def save(self, name):
         self.model.save_weights(name)
 
+    def makeOnes(self):
+        return np.ones((1, self.actionCount, self.predSize))
 
+    def makeMask(self, action):
+        mask = np.zeros((self.actionCount, self.predSize))
+        mask[int(action)] = np.ones((self.predSize))
+        return mask.reshape(1, self.actionCount, self.predSize)
