@@ -4,6 +4,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Lambda, Conv2D, MaxPooling2D, Dropout, Dense, Flatten, Multiply
 from tensorflow.keras.layers import BatchNormalization, Reshape, Subtract, Add, RepeatVector
 from tensorflow.keras.layers import LeakyReLU, Concatenate, Dense, LSTM, Input, Concatenate
+from tensorflow.keras.initializers import TruncatedNormal
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import load_model
 import functions as f
@@ -14,6 +15,11 @@ import numpy as np
 import random
 import imageprocessor as ip
 import threading
+import math
+
+def msra_stddev(x, k_h, k_w): 
+    return 1/math.sqrt(0.5*k_w*k_h*x.shape[-1])
+
 
 class Memory:
     def __init__(self, futureVec, mesCount, maxSize, stateShape):
@@ -82,11 +88,11 @@ class DFPAgent:
         self.mesCount = np.prod(M_shape)
         self.epsilon =          1
         self.epsilon0 =         1
-        self.epsilonMin =       0.05
+        self.epsilonMin =       0.1
         self.epsilonDecay =     2000
         self.learningRate =     0.00001
         self.maxLearningRate =  0.00001
-        self.minLearningRate =  0.000005
+        self.minLearningRate =  0.000001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
         self.batchSize = 64
@@ -100,7 +106,6 @@ class DFPAgent:
         self.timesteps = len(self.futureTargets)
         self.predSize = self.timesteps * np.prod(M_shape)
         self.model = self.makeModel(I_shape, M_shape, G_shape)
-
 
                        #Image, Measurement, Goal
     def makeModel(self, I_shape, M_shape, G_shape):
@@ -119,42 +124,72 @@ class DFPAgent:
 
         else:
             print("Using Convolutional model")
-            i = Conv2D(32, (8, 8), strides=(4, 4))(input_Image)
-            i = LeakyReLU()(i)
-            i = Conv2D(64, (4, 4), strides=(2, 2))(i)
-            i = LeakyReLU()(i)
-            i = Conv2D(64, (3, 3))(i)
-            i = LeakyReLU()(i)
+            i = Conv2D(32, (8, 8), strides=4, padding="same",
+                bias_initializer="ones",
+                kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Image, 8, 8)))(input_Image)
+            i = LeakyReLU(alpha=0.2)(i)
+            
+            i = Conv2D(64, (4, 4), strides=2,
+                bias_initializer="ones",
+                kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 4, 4)))(i)
+            i = LeakyReLU(alpha=0.2)(i)
+            
+            i = Conv2D(64, 3, strides=1,
+                bias_initializer="ones",
+                kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 3, 3)))(i)
+            i = LeakyReLU(alpha=0.2)(i)
+            
             i = Flatten()(i)
-            i = Dense(512, activation='relu')(i)
+            i = Dense(512, activation='linear',
+                kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            
 
+        # Measurement
+        m = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Measurement, 1, 1)))(input_Measurement)
+        m = LeakyReLU(alpha=0.2)(m)
 
-        m = Dense(128)(input_Measurement)
+        m = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
         m = LeakyReLU()(m)
-        m = Dense(128)(m)
-        m = LeakyReLU()(m)
-        m = Dense(128, activation='relu')(m)
+        
+        m = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
 
-        g = Dense(128)(input_Goal)
+        # Goal
+        g = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Goal, 1, 1)))(input_Goal)
+        g = LeakyReLU(alpha=0.2)(m)
+
+        g = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
         g = LeakyReLU()(g)
-        g = Dense(128)(g)
-        g = LeakyReLU()(g)
-        g = Dense(128, activation='relu')(g)
+        
+        g = Dense(128,
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
 
         j = Concatenate()([i,m,g])
         pred_size = np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(512, name='Expectation_1')(j)
-        expectation = LeakyReLU()(expectation)
+        expectation = Dense(512, name='Expectation_1',
+        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
+        expectation = LeakyReLU(alpha=0.2)(expectation)
+
         expectation = Dense(pred_size \
-                    , activation='linear', name='Expectation_2')(expectation)
+                    , activation='linear', name='Expectation_2',
+                    kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(expectation, 1, 1)))(expectation)
+        
         expectation = Concatenate()([expectation]*self.actionCount)
 
         #Action stream
-        actions = Dense(1024, name='Action_1')(j)
-        actions = LeakyReLU()(actions)
-        actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_2')(actions)
+        actions = Dense(512, name='Action_1',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
+        actions = LeakyReLU(alpha=0.2)(actions)
+
+        actions = Dense(self.actionCount*pred_size,activation='linear',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(actions, 1, 1)),
+            name='Action_2')(actions)
         #actions = BatchNormalization()(actions)
         #actions = Reshape((self.actionCount, pred_size))(actions)
         """
@@ -180,7 +215,7 @@ class DFPAgent:
         predictions = Multiply()([predictions, input_mask])
 
         model = Model([input_Image, input_Measurement, input_Goal, input_mask], predictions)
-        opt = Adam(lr=self.learningRate, decay=1e-6)
+        opt = Adam(lr=self.learningRate, beta_1=0.95, beta_2=0.999, epsilon=1e-04)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
         plot_model(model, to_file='DFPNetwork.png')
@@ -219,7 +254,7 @@ class DFPAgent:
             loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
             self.lock.release() 
             if self.epsilon > self.epsilonMin:
-                self.epsilon *= 0.99#9#6
+                self.epsilon *= 0.9996
             return loss
         self.lock.release() 
 
@@ -261,10 +296,7 @@ class DFPAgent:
     def decayLearningRate(self):
         self.lock.acquire()
         if self.learningRate > self.minLearningRate:
-            if self.learningRate < 0.00001:
-                self.learningRate *= 0.99
-            else:
-                self.learningRate *= 0.9
+            self.learningRate *= 0.999
             self.model.optimizer.lr.assign(self.learningRate)
         self.lock.release()
 
