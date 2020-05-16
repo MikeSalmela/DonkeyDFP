@@ -235,7 +235,7 @@ class DFPAgent:
             loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
             self.lock.release() 
             if self.epsilon > self.epsilonMin:
-                self.epsilon *= 0.9996
+                self.epsilon *= 0.995
             return loss
         self.lock.release() 
 

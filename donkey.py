@@ -31,7 +31,7 @@ imgFrames = 4
 speed = 0.3
 f_vec = [1, 2, 4, 8, 16, 32]
 l = len(f_vec)
-mes_c = 4
+mes_c = 3
 agent = DFPAgent(6, (encoded, imgFrames), (mes_c,), (mes_c*l,), f_vec, True)
 
 os.environ['DONKEY_SIM_PATH'] = "/home/walker/Programs/DonkeySimLinux/donkey_sim.x86_64"
@@ -41,15 +41,18 @@ steps = 0
 avrgsteps = []
 steps_total = 0
 env = gym.make("donkey-generated-track-v0")
+
+agent.load("pretrained_encoder_32_drive.h5") 
+
 try:
     for episode in range(10000):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
         #mes = deviation, reward, crash, speed
-        mes = np.array([0, 1, 0, 0])
+        mes = np.array([0, 0, 0])
         mes = mes.reshape((1,mes_c))
-        goal = np.array([-1, 0.8, -10, 0.5]*l)
+        goal = np.array([-0.8, -10, 1]*l)
         t = 0
         done = False
         tm = time.perf_counter()
@@ -75,7 +78,7 @@ try:
             deviation, speed = makeMes(info)
             if done:
                 crash = 1
-            mes = np.array([deviation, reward, crash, speed])
+            mes = np.array([deviation, crash, speed])
             
             if (t == 2000):
                 done = True 
