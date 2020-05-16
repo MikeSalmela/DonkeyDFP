@@ -190,24 +190,9 @@ class DFPAgent:
         actions = Dense(self.actionCount*pred_size,activation='linear',
             kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(actions, 1, 1)),
             name='Action_2')(actions)
-        #actions = BatchNormalization()(actions)
+        actions = BatchNormalization()(actions)
         #actions = Reshape((self.actionCount, pred_size))(actions)
-        """
-        actions = Dense(self.actionCount*pred_size,activation='relu', name='Action_1')(merged)
-        actions = Reshape((self.actionCount, pred_size))(actions)
-        """
-        """
-        predictions = Add()([actions, expectation])
-        """
-        """
-        predictions = []
-        for i in range(self.actionCount):
-            #action = Lambda(lambda x: x[:,i,:])(actions)
-            action = Dense(pred_size, activation='relu')(merged)
-            out = Add()([action, expectation])
-            predictions.append(out)
-        """
-
+       
         predictions = Add()([actions, expectation])
         predictions = Reshape((self.actionCount, pred_size))(predictions)
         Mask_shape = (self.actionCount, pred_size)
@@ -242,14 +227,10 @@ class DFPAgent:
             #f_target = self.lpred(state, mes, goal)
             f_target = np.zeros((self.batchSize, self.actionCount, self.predSize))
             mask = np.zeros((self.batchSize, self.actionCount, self.predSize))
-            #print(f_target.shape)
 
             for i in range(self.batchSize):
                 f_target[i][int(action[i])][:] = f[i]
                 mask[i] = self.makeMask(action[i])
-                #print(mask[i])
-            #print("f_target")
-            #print(f_target[0]) 
             self.trains += 1
             loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
             self.lock.release() 
@@ -279,24 +260,15 @@ class DFPAgent:
     def act(self, state, mes, goal):
         if len(self.memory.mem) < self.startPoint or np.random.rand() <= self.epsilon:
             return random.randrange(0, self.actionCount)
-        self.lock.acquire() 
-        prediction = np.array(self.lpred(state, mes, np.array([goal])))
+        prediction = np.array(self.pred(state, mes, np.array([goal])))
         prediction = np.vstack(prediction)
-        #print(prediction.shape)
-        #print(prediction)
-        #mp = np.multiply(prediction, goal)
-        #print("multiply")
-        #print(mp)
         sums = np.sum(np.multiply(prediction, goal), axis=1)
-        #print("sums")
-        #print(sums)
-        self.lock.release() 
         return np.argmax(sums)
 
     def decayLearningRate(self):
         self.lock.acquire()
         if self.learningRate > self.minLearningRate:
-            self.learningRate *= 0.999
+            self.learningRate *= 0.998
             self.model.optimizer.lr.assign(self.learningRate)
         self.lock.release()
 
