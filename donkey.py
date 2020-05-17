@@ -38,11 +38,13 @@ os.environ['DONKEY_SIM_PATH'] = "/home/walker/Programs/DonkeySimLinux/donkey_sim
 os.environ['DONKEY_SIM_PORT'] = str(9091)
 os.environ['DONKEY_SIM_HEADLESS'] = str(0) # "1" is headless
 steps = 0
-avrgsteps = []
+#avrgsteps = []
 steps_total = 0
 env = gym.make("donkey-generated-track-v0")
 
+avrgsteps = np.genfromtxt("autoencoder_32.csv", delimiter=',')
 agent.load("pretrained_encoder_32_drive.h5") 
+
 
 try:
     for episode in range(10000):
@@ -89,11 +91,10 @@ try:
         print("Episode :", episode)
         agent.info()
         env.reset()
-        avrgsteps.append(int(steps))
+        np.append(avrgsteps, steps)
         steps = 0
         if (episode%20 == 0):
             agent.save("Pretrained.h5")
-        if (episode%1000 == 0):
             agent.decayLearningRate()
 
         a = np.asarray(avrgsteps)

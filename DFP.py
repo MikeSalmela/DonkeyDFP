@@ -86,11 +86,11 @@ class DFPAgent:
         print("Create agent")
         self.encoded = encoded
         self.mesCount = np.prod(M_shape)
-        self.epsilon =          1
-        self.epsilon0 =         1
-        self.epsilonMin =       0.1
+        self.epsilon =          0.1
+        self.epsilon0 =         0.1
+        self.epsilonMin =       0.001
         self.epsilonDecay =     2000
-        self.learningRate =     0.00001
+        self.learningRate =     8.657629223307595e-06
         self.maxLearningRate =  0.00001
         self.minLearningRate =  0.000001
         self.learningRateDecay= 0.9995
@@ -117,10 +117,14 @@ class DFPAgent:
         if (self.encoded):
             print("Using encoder model")
             i = Flatten()(input_Image)
-            i = Dense(512, activation='relu')(i)
-            i = Dense(512, activation='relu')(i)
-            i = Dense(256, activation='relu')(i)
-            i = Dense(256, activation='linear')(i)
+            i = Dense(512, activation='relu',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(512, activation='relu',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(256, activation='relu',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(256, activation='linear',
+            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
 
         else:
             print("Using Convolutional model")
@@ -191,7 +195,6 @@ class DFPAgent:
             kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(actions, 1, 1)),
             name='Action_2')(actions)
         actions = BatchNormalization()(actions)
-        #actions = Reshape((self.actionCount, pred_size))(actions)
        
         predictions = Add()([actions, expectation])
         predictions = Reshape((self.actionCount, pred_size))(predictions)
