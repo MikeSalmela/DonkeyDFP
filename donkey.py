@@ -27,12 +27,14 @@ def makeMes(info):
     deviation = min(round((info['cte']**2)/10, 1),3)
     speed = round(info['speed']/10, 1)
     return deviation, speed
+
 imgFrames = 4
 speed = 0.3
 f_vec = [1, 2, 4, 8, 16, 32]
 l = len(f_vec)
 mes_c = 3
 agent = DFPAgent(6, (encoded, imgFrames), (mes_c,), (mes_c*l,), f_vec, True)
+
 
 os.environ['DONKEY_SIM_PATH'] = "/home/walker/Programs/DonkeySimLinux/donkey_sim.x86_64"
 os.environ['DONKEY_SIM_PORT'] = str(9091)
