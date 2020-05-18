@@ -42,8 +42,10 @@ steps = 0
 steps_total = 0
 env = gym.make("donkey-generated-track-v0")
 
-avrgsteps = np.genfromtxt("autoencoder_32.csv", delimiter=',')
-agent.load("pretrained_encoder_32_drive.h5") 
+avrgsteps = np.array([])
+
+#avrgsteps = np.genfromtxt("autoencoder_32.csv", delimiter=',')
+#agent.load("pretrained_encoder_32_drive.h5") 
 
 
 try:
@@ -91,14 +93,14 @@ try:
         print("Episode :", episode)
         agent.info()
         env.reset()
-        np.append(avrgsteps, steps)
+        avrgsteps = np.append(avrgsteps, steps)
         steps = 0
-        if (episode%20 == 0):
+        if (episode%5 == 0):
             agent.save("Pretrained.h5")
             agent.decayLearningRate()
 
-        a = np.asarray(avrgsteps)
-        np.savetxt("autoencoder_32.csv", a, delimiter=",")
+        #a = np.asarray(avrgsteps)
+        np.savetxt("autoencoder_32.csv", avrgsteps, delimiter=",")
 
     agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)
@@ -110,6 +112,6 @@ except:
     agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)
     plt.savefig("autoencoder_32.png")
-    a = np.asarray(avrgsteps)
-    np.savetxt("autoencoder_32.csv", a, delimiter=",")
+    #a = np.asarray(avrgsteps)
+    np.savetxt("autoencoder_32.csv", avrgsteps, delimiter=",")
     plt.show()

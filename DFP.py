@@ -86,12 +86,12 @@ class DFPAgent:
         print("Create agent")
         self.encoded = encoded
         self.mesCount = np.prod(M_shape)
-        self.epsilon =          0.1
-        self.epsilon0 =         0.1
-        self.epsilonMin =       0.001
+        self.epsilon =          1
+        self.epsilon0 =         1
+        self.epsilonMin =       0.01
         self.epsilonDecay =     2000
-        self.learningRate =     8.657629223307595e-06
-        self.maxLearningRate =  0.00001
+        self.learningRate =     0.0001
+        self.maxLearningRate =  0.0001
         self.minLearningRate =  0.000001
         self.learningRateDecay= 0.9995
         self.actionCount = num_actions
@@ -117,14 +117,14 @@ class DFPAgent:
         if (self.encoded):
             print("Using encoder model")
             i = Flatten()(input_Image)
-            i = Dense(512, activation='relu',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
-            i = Dense(512, activation='relu',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
-            i = Dense(256, activation='relu',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
-            i = Dense(256, activation='linear',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(512, activation='relu')(i)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(512, activation='relu')(i)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(256, activation='relu')(i)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
+            i = Dense(256, activation='linear')(i)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(i, 1, 1)))(i)
 
         else:
             print("Using Convolutional model")
@@ -149,52 +149,52 @@ class DFPAgent:
             
 
         # Measurement
-        m = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Measurement, 1, 1)))(input_Measurement)
+        m = Dense(128)(input_Measurement)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Measurement, 1, 1)))(input_Measurement)
         m = LeakyReLU(alpha=0.2)(m)
 
-        m = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
+        m = Dense(128)(m)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
         m = LeakyReLU()(m)
         
-        m = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
+        m = Dense(128, activation='linear')(m)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(m, 1, 1)))(m)
 
         # Goal
-        g = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Goal, 1, 1)))(input_Goal)
+        g = Dense(128)(input_Goal)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Goal, 1, 1)))(input_Goal)
         g = LeakyReLU(alpha=0.2)(m)
 
-        g = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
+        g = Dense(128)(g)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
         g = LeakyReLU()(g)
         
-        g = Dense(128,
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
+        g = Dense(128, activation='linear')(g)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
 
         j = Concatenate()([i,m,g])
         pred_size = np.prod(M_shape) * self.timesteps
 
         #Expectation stream
-        expectation = Dense(512, name='Expectation_1',
-        kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
+        expectation = Dense(512, name='Expectation_1')(j)
+        #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
         expectation = LeakyReLU(alpha=0.2)(expectation)
 
         expectation = Dense(pred_size \
-                    , activation='linear', name='Expectation_2',
-                    kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(expectation, 1, 1)))(expectation)
+                    , activation='linear', name='Expectation_2')(expectation)
+                    #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(expectation, 1, 1)))(expectation)
         
         expectation = Concatenate()([expectation]*self.actionCount)
 
         #Action stream
-        actions = Dense(512, name='Action_1',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
+        actions = Dense(512, name='Action_1')(j)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(j, 1, 1)))(j)
         actions = LeakyReLU(alpha=0.2)(actions)
 
-        actions = Dense(self.actionCount*pred_size,activation='linear',
-            kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(actions, 1, 1)),
-            name='Action_2')(actions)
-        actions = BatchNormalization()(actions)
+        actions = Dense(self.actionCount*pred_size,activation='linear')(actions)
+            #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(actions, 1, 1)),
+            #name='Action_2')(actions)
+        #actions = BatchNormalization()(actions)
        
         predictions = Add()([actions, expectation])
         predictions = Reshape((self.actionCount, pred_size))(predictions)
@@ -203,7 +203,7 @@ class DFPAgent:
         predictions = Multiply()([predictions, input_mask])
 
         model = Model([input_Image, input_Measurement, input_Goal, input_mask], predictions)
-        opt = Adam(lr=self.learningRate, beta_1=0.95, beta_2=0.999, epsilon=1e-04)
+        opt = Adam(lr=self.learningRate, beta_1=0.95, beta_2=0.999)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
         plot_model(model, to_file='DFPNetwork.png')
