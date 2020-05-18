@@ -199,10 +199,11 @@ class DFPAgent:
         predictions = Add()([actions, expectation])
         predictions = Reshape((self.actionCount, pred_size))(predictions)
         Mask_shape = (self.actionCount, pred_size)
-        input_mask = Input(shape=Mask_shape, name='mask_input')
-        predictions = Multiply()([predictions, input_mask])
+        #input_mask = Input(shape=Mask_shape, name='mask_input')
+        #predictions = Multiply()([predictions, input_mask])
 
-        model = Model([input_Image, input_Measurement, input_Goal, input_mask], predictions)
+        #model = Model([input_Image, input_Measurement, input_Goal, input_mask], predictions)
+        model = Model([input_Image, input_Measurement, input_Goal], predictions)
         opt = Adam(lr=self.learningRate, beta_1=0.95, beta_2=0.999)
         model.compile(loss="mse", optimizer=opt)
         model.summary()
@@ -227,15 +228,16 @@ class DFPAgent:
         self.lock.acquire()
         if (self.memory.getSize() > self.startPoint):
             state, mes, action, f, goal = self.memory.randomSample(self.batchSize)
-            #f_target = self.lpred(state, mes, goal)
-            f_target = np.zeros((self.batchSize, self.actionCount, self.predSize))
-            mask = np.zeros((self.batchSize, self.actionCount, self.predSize))
+            f_target = self.lpred(state, mes, goal)
+            #f_target = np.zeros((self.batchSize, self.actionCount, self.predSize))
+            #mask = np.zeros((self.batchSize, self.actionCount, self.predSize))
 
             for i in range(self.batchSize):
                 f_target[i][int(action[i])][:] = f[i]
-                mask[i] = self.makeMask(action[i])
+                #mask[i] = self.makeMask(action[i])
             self.trains += 1
-            loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
+            #loss = self.model.train_on_batch([state, mes, goal, mask], f_target)
+            loss = self.model.train_on_batch([state, mes, goal], f_target)
             self.lock.release() 
             if self.epsilon > self.epsilonMin:
                 self.epsilon *= 0.995
@@ -251,12 +253,13 @@ class DFPAgent:
         return turn, speed
 
     def lpred(self, state, mes, goal):
-        return self.model.predict([state, mes, goal, self.makeOnes()])
+        #return self.model.predict([state, mes, goal, self.makeOnes()])
+        return self.model.predict([state, mes, goal])
 
 
     def pred(self, state, mes, goal):
         self.lock.acquire() 
-        pred = self.model.predict([state, mes, goal, self.makeOnes()])
+        pred = self.lpred(state, mes, goal)
         self.lock.release() 
         return pred
 
