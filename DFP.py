@@ -163,7 +163,7 @@ class DFPAgent:
         # Goal
         g = Dense(128)(input_Goal)
         #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(input_Goal, 1, 1)))(input_Goal)
-        g = LeakyReLU(alpha=0.2)(m)
+        g = LeakyReLU(alpha=0.2)(g)
 
         g = Dense(128)(g)
         #kernel_initializer=TruncatedNormal(stddev=0.9*msra_stddev(g, 1, 1)))(g)
