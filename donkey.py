@@ -51,14 +51,15 @@ avrgsteps = np.array([])
 
 
 try:
-    for episode in range(10000):
+    for episode in range(1000):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
         #mes = deviation, reward, crash, speed
         mes = np.array([0, 0, 0])
         mes = mes.reshape((1,mes_c))
-        goal = np.array([-0.8, -10, 1]*l)
+        #goal = np.array([-0.8, -10, 1]*l)
+        goal = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -0.8, -10, 1, -0.8, -10, 1, -0.8, -10, 1])
         t = 0
         done = False
         tm = time.perf_counter()
