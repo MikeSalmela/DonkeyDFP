@@ -32,7 +32,7 @@ imgFrames = 4
 speed = 0.3
 f_vec = [1, 2, 4, 8, 16, 32]
 l = len(f_vec)
-mes_c = 3
+mes_c = 1
 agent = DFPAgent(6, (encoded, imgFrames), (mes_c,), (mes_c*l,), f_vec, True)
 
 
@@ -51,15 +51,17 @@ avrgsteps = np.array([])
 
 
 try:
+
     for episode in range(1000):
         img = modImg(env.reset())
         state = np.stack([img]*imgFrames, axis=2)
         state = state.reshape((1, encoded, imgFrames))
         #mes = deviation, reward, crash, speed
-        mes = np.array([0, 0, 0])
+        mes = np.array([0])
+        print(mes)
         mes = mes.reshape((1,mes_c))
         #goal = np.array([-0.8, -10, 1]*l)
-        goal = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -0.8, -10, 1, -0.8, -10, 1, -0.8, -10, 1])
+        goal = np.array([1]*l)
         t = 0
         done = False
         tm = time.perf_counter()
@@ -85,7 +87,8 @@ try:
             deviation, speed = makeMes(info)
             if done:
                 crash = 1
-            mes = np.array([deviation, crash, speed])
+            mes = np.array(reward)
+            #mes = np.array([deviation, crash, speed])
             
             if (t == 2000):
                 done = True 
@@ -111,6 +114,8 @@ try:
     a = np.asarray(avrgsteps)
     np.savetxt("autoencoder_32.csv", a, delimiter=",")
     plt.show()
+
+
 except:
     agent.save("pretrained_encoder_32_drive.h5") 
     plt.plot(avrgsteps)
